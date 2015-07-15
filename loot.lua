@@ -70,6 +70,14 @@ local op = {
 	le = function( x, y ) return x <= y end,
 	eq = function( x, y ) return x == y end,
 	ne = function( x, y ) return x ~= y end,
+
+	eq0 = function( x ) return x == 0 end,
+	ne0 = function( x ) return x ~= 0 end,
+	positive = function( x ) return x > 0 end,
+	negative = function( x ) return x < 0 end,
+	even = function( x ) return x % 2 == 0 end,
+	odd = function( x ) return x % 2 == 1 end,
+
 	equal = equal,
 }
 
@@ -133,6 +141,13 @@ local function map( f, t )
 	return t_
 end
 
+local function mapin( f, t )
+	for i = 1, #t do
+		t[i] = f( t[i], i )
+	end
+	return t
+end
+
 local function each( f, t )
 	for i = 1, #t do
 		f( t[i], i )
@@ -174,6 +189,13 @@ local function kvmap( f, t )
 	return t_
 end
 
+local function kvmapin( f, t )
+	for k, v in pairs( t ) do
+		t[k] = f( v, k )
+	end
+	return t
+end
+
 local function kveach( f, t )
 	for k, v in pairs( t ) do
 		f( v, k )
@@ -188,6 +210,15 @@ local function kvfilter( f, t )
 		end
 	end
 	return t_
+end
+
+local function kvfilterin( f, t )
+	for k, v in pairs( t ) do
+		if not f( v, k ) then
+			t[k] = nil
+		end
+	end
+	return t
 end
 
 local function kvreduce( f, acc, t )
@@ -600,7 +631,11 @@ functions = {
 	kvfilter = kvfilter,
 	map = map,
 	filter = filter,
-	
+
+	kvmapin = kvmapin,
+	kvfilterin = kvfilterin,
+	mapin = mapin,
+
 	kveach = kveach,
 	each = each,
 	traverse = traverse,
