@@ -50,6 +50,7 @@ local op = {
 
 	isid = isid,
 	isnil = function( y ) return y == nil end,
+	isnotnil = function( y ) return y ~= nil end,
 	istrue = function( y ) return y == true end,
 	isfalse = function( y ) return y == false end,
 	isnumber = function( y ) return type( y ) == 'number' end,
@@ -81,6 +82,8 @@ local op = {
 	equal = equal,
 }
 
+-- TODO
+-- add memoization
 local opc = {
 	add = function( x ) return function( y ) return y + x end end,
 	sub = function( x ) return function( y ) return y - x end end,
@@ -93,6 +96,14 @@ local opc = {
 	log = function( x ) return function( y ) return math.log( y, x ) end end,
 	concatr = function( x ) return function( y ) return y .. x end end,
 	concatl = function( x ) return function( y ) return x .. y end end,
+
+	lor = function( x )  return function( y ) return y or x end end,
+	land = function( x ) return function( y ) return y and x end end,
+	lnot = function( x ) return function() return not x end end,
+
+	fnot = function( x ) return function( y ) return not x( y ) end end,
+	fand = function( x, y ) return function( z ) return x( z ) and y( z ) end end,
+	fnor = function( x, y ) return function( z ) return x( z ) or  y( z ) end end,
 
 	gt = function( x ) return function( y ) return y >  x end end,
 	ge = function( x ) return function( y ) return y >= x end end,
