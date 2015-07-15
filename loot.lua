@@ -82,6 +82,18 @@ local op = {
 	equal = equal,
 }
 
+local memoize = function( closure, mode )
+	local cache
+	cache = setmetatable( {}, {
+		__mode = mode, 
+		__index = function( self, v )
+			local f = closure( v )
+			cache[v] = f
+			return f
+		end} )
+	return cache
+end
+
 -- TODO
 -- add memoization
 local opc = {
@@ -693,6 +705,8 @@ functions = {
 	pp = pp,
 
 	export = export,
+
+	memoize = memoize,
 }
 
 return functions
