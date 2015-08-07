@@ -82,6 +82,13 @@ local op = {
 	equal = equal,
 }
 
+local op_map = {
+	['+'] = op.add, ['-'] = op.sub, ['*'] = op.mul, ['/'] = op.div, 
+	['//'] = op.idiv, ['%'] = op.mod, ['^'] = op.pow,
+	['>'] = op.gt, ['<'] = op.lt, ['=='] = op.eq, ['~='] = op.ne, ['>='] = op.ge, ['<='] = op.le,}
+
+setmetatable( op, {op_map = op_map, __index = function(self,k) return op_map[k] end} )
+
 local memoize = function( closure, mode )
 	local cache
 	cache = setmetatable( {}, {
@@ -90,42 +97,51 @@ local memoize = function( closure, mode )
 			local f = closure( v )
 			cache[v] = f
 			return f
-		end} )
+		end,
+		__call = function( self, v )
+			return cache[v]
+		end,
+	} )
 	return cache
 end
 
--- TODO
--- add memoization
 local opc = {
-	add = function( x ) return function( y ) return y + x end end,
-	sub = function( x ) return function( y ) return y - x end end,
-	div = function( x ) return function( y ) return y / x end end,
-	idiv = function( x ) return function( y ) if y >= 0 then return math.floor(y/x) else return math.ceil(y/x) end end end,
-	mul = function( x ) return function( y ) return y * x end end,
-	mod = function( x ) return function( y ) return y % x end end,
-	pow = function( x ) return function( y ) return y ^ x end end,
-	expt = function( x ) return function( y ) return x ^ y end end,
-	log = function( x ) return function( y ) return math.log( y, x ) end end,
-	concatr = function( x ) return function( y ) return y .. x end end,
-	concatl = function( x ) return function( y ) return x .. y end end,
+	add = memoize( function( x ) return function( y ) return y + x end end, 'kv' ),
+	sub = memoize( function( x ) return function( y ) return y - x end end, 'kv' ),
+	div = memoize( function( x ) return function( y ) return y / x end end, 'kv' ),
+	idiv = memoize( function( x ) return function( y ) if y >= 0 then return math.floor(y/x) else return math.ceil(y/x) end end end, 'kv' ),
+	mul = memoize( function( x ) return function( y ) return y * x end end, 'kv' ),
+	mod = memoize( function( x ) return function( y ) return y % x end end, 'kv' ),
+	pow = memoize( function( x ) return function( y ) return y ^ x end end, 'kv' ),
+	expt = memoize( function( x ) return function( y ) return x ^ y end end, 'kv' ),
+	log = memoize( function( x ) return function( y ) return math.log( y, x ) end end, 'kv' ),
+	concatr = memoize( function( x ) return function( y ) return y .. x end end, 'kv' ),
+	concatl = memoize( function( x ) return function( y ) return x .. y end end, 'kv' ),
 
-	lor = function( x )  return function( y ) return y or x end end,
-	land = function( x ) return function( y ) return y and x end end,
-	lnot = function( x ) return function() return not x end end,
+	lor = memoize( function( x )  return function( y ) return y or x end end, 'kv' ),
+	land = memoize( function( x ) return function( y ) return y and x end end, 'kv' ),
+	lnot = memoize( function( x ) return function() return not x end end, 'kv' ),
 
-	fnot = function( x ) return function( y ) return not x( y ) end end,
+	fnot = memoize( function( x ) return function( y ) return not x( y ) end end, 'kv' ),
 	fand = function( x, y ) return function( z ) return x( z ) and y( z ) end end,
 	fnor = function( x, y ) return function( z ) return x( z ) or  y( z ) end end,
 
-	gt = function( x ) return function( y ) return y >  x end end,
-	ge = function( x ) return function( y ) return y >= x end end,
-	lt = function( x ) return function( y ) return y <  x end end,
-	le = function( x ) return function( y ) return y <= x end end,
-	eq = function( x ) return function( y ) return y == x end end,
-	ne = function( x ) return function( y ) return y ~= x end end,
-	equal = function( x ) return function( y ) return equal( x, y ) end end,
-	c = function( x ) return function() return x end end,
+	gt = memoize( function( x ) return function( y ) return y >  x end end, 'kv' ),
+	ge = memoize( function( x ) return function( y ) return y >= x end end, 'kv' ),
+	lt = memoize( function( x ) return function( y ) return y <  x end end, 'kv' ),
+	le = memoize( function( x ) return function( y ) return y <= x end end, 'kv' ),
+	eq = memoize( function( x ) return function( y ) return y == x end end, 'kv' ),
+	ne = memoize( function( x ) return function( y ) return y ~= x end end, 'kv' ),
+	equal = memoize( function( x ) return function( y ) return equal( x, y ) end end, 'kv' ),
+	c = memoize( function( x ) return function() return x end end, 'kv' ),
 }
+
+local opc_map = {
+	['+'] = opc.add, ['-'] = opc.sub, ['*'] = opc.mul, ['/'] = opc.div, ['//'] = opc.idiv, 
+	['%'] = opc.mod, ['^'] = opc.pow,
+	['>'] = opc.gt, ['<'] = opc.lt, ['=='] = opc.eq, ['~='] = opc.ne, ['>='] = opc.ge, ['<='] = opc.le,}
+
+setmetatable( op, {op_map = op_map, __index = function(self,k) return op_map[k] end} )
 
 local function compose( ... )
 	local n = select( '#', ... )
@@ -451,6 +467,14 @@ local function shuffle( t, f )
 	return t_
 end
 
+local function shuffleinplace( t, f )
+	local f = f or math.random
+	for i = #t, 1, -1 do
+		local idx = f( i )
+		t[idx], t[i] = t[i], t[idx]
+	end
+	return t
+end
 
 local function serialize( v, tables, ident, identSymbol )
 	local t_ = type( v )
@@ -612,6 +636,68 @@ local function unzip( t )
 	return unpack( t_ )
 end
 
+local function permutations( input )
+	local out, used, n, level, acc = {}, {}, #input, 1, {}
+	local function recpermute( level )
+		if level <= n then
+			for i = 1, n do
+				if not used[i] then
+					used[i] = true
+					out[#out+1] = input[i]
+					recpermute( level+1 )
+					used[i] = false
+					out[#out] = nil
+				end
+			end
+		else
+			local t = {}
+			for i = 1, n do t[i] = out[i] end
+			acc[#acc+1] = t
+		end
+		return acc
+	end
+	return recpermute( 1 )
+end
+
+local function boolnew( n )
+	local t = {}
+	if type( n ) == 'number' then
+		for i = 1, n do
+			t[i] = false
+		end
+	elseif type( n ) == 'string' then
+		for i = 1, #n do
+			t[i] = n:sub(i,i) == '1'
+		end
+	end
+	return t
+end
+
+local function booltonumber( b )
+	local acc = 0
+	for i = 1, #b do
+		acc = b[i]*2^(i-1)
+	end
+	return acc
+end
+
+local function combinations( input, count )
+	error('unimplemented')
+end
+
+local function unique( t )
+	local enc, out, k = {}, {}, 0
+	for i = 1, #t do
+		local e = t[i]
+		if not enc[e] then
+			enc[e] = true
+			k = k + 1
+			out[k] = e
+		end
+	end
+	return out
+end
+
 local function traverse( t, f, level, key, saved )
 	local level = level or 1
 	local saved = saved or {}
@@ -672,6 +758,7 @@ functions = {
 	slice = slice,
 	reverse = reverse,
 	shuffle = shuffle,
+	shuffleinplace = shuffleinplace,
 	
 	nkeys = nkeys,
 	indexof = indexof,
@@ -684,7 +771,11 @@ functions = {
 	intersect = intersect,
 	difference = difference,
 	union = union,
-	
+	permutations = permutations,
+	combinations = combinations,
+
+	unique = unique,
+
 	copy = copy,
 	deepcopy = deepcopy,
 	
