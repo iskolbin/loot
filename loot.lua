@@ -2,32 +2,74 @@ local any = {}
 
 local function nkeys( t )
 	local len = 0
-	for k, v in pairs( t ) do
-		len = len + 1
-	end
+	for k, v in pairs( t ) do len = len + 1 end
 	return len
 end
 
 local function equal( x, y )
 	if x == y or x == any or y == any then
 		return true
-	elseif type(x) == 'table' and type(y) == 'table' then
-		if nkeys( x ) ~= nkeys( y ) then
-			return false
-		else
-			for k, v in pairs( x ) do
-				if y[k] == nil then
-					return false
-				elseif not equal( v, y[k] ) then
-					return false
-				end
+	elseif type(x) == 'table' and type(y) == 'table' and nkeys( x ) == nkeys( y ) then
+		for k, v in pairs( x ) do
+			if y[k] == nil or not equal( v, y[k] ) then
+				return false
 			end
-			return true
 		end
+		return true
 	else
 		return false
 	end
 end
+
+--[[
+local typespriority = {
+	['nil'] = 1,
+	['boolean'] = 2,
+	['number'] = 3,
+	['function'] = 4,
+	['userdata'] = 5,
+	['thread'] = 6,
+	['string'] = 7,
+	['table'] = 8,
+}
+
+local typecompare; typecompare = {
+	['nil'] = function( a, b ) return 0 end,
+	['boolean'] = function( a, b ) if a == b then return 0 elseif a then return 1 else return -1 end end,
+	['number'] = function( a, b ) return a == b and 0 or a > b and 1 or -1 end,
+	['function'] = function( a, b ) return a == b and 0 or typecompare.string( tostring(a), tostring(b)) end,
+	['userdata'] = function( a, b ) return a == b and 0 or typecompare.string( tostring(a), tostring(b)) end,
+	['thread'] = function( a , b ) return a == b and 0 or typecompare.string( tostring(a), tostring(b)) end,
+	['string'] = function( a, b ) return a == b and 0 or a > b and 1 or -1 end,
+	['table'] = function( a, b ) return a == b and 0 or typecompare.string( tostring(a), tostring(b)) end,
+}
+
+local function deepsort( t )
+	local function kvcompare( a, b )
+		local ta, tb = typespriority[type( a )], typespriority[type( b )]
+		if ta > tb then
+			return 1
+		elseif ta < tb then
+			return -1
+		else
+			return typecompare( a, b )
+		end
+	end
+end
+
+local function equal( x, y )
+	if x == y or x == any or y == any then
+		return true
+	elseif type(x) == 'table' and type(y) == 'table' and nkeys( x ) == nkeys( y ) then
+		local kv1, kv2 = {}, {}
+		for k, v in pairs( x ) do kv1[#kv1+1] = {k,v} end
+		for k, v in pairs( y ) do kv2[#kv2+1] = {k,v} end
+		table.sort( kv1, typecompare )
+		table.sort( kv2, typecompare )
+		return false
+	end
+end
+--]]
 
 local function isid( s )
 	return type( s ) == 'string' and s:match('[%a_][%w_]*') == s
@@ -82,13 +124,6 @@ local op = {
 	equal = equal,
 }
 
-local op_map = {
-	['+'] = op.add, ['-'] = op.sub, ['*'] = op.mul, ['/'] = op.div, 
-	['//'] = op.idiv, ['%'] = op.mod, ['^'] = op.pow,
-	['>'] = op.gt, ['<'] = op.lt, ['=='] = op.eq, ['~='] = op.ne, ['>='] = op.ge, ['<='] = op.le,}
-
-setmetatable( op, {op_map = op_map, __index = function(self,k) return op_map[k] end} )
-
 local memoize = function( closure, mode )
 	local cache
 	cache = setmetatable( {}, {
@@ -136,13 +171,6 @@ local opc = {
 	c = memoize( function( x ) return function() return x end end, 'kv' ),
 }
 
-local opc_map = {
-	['+'] = opc.add, ['-'] = opc.sub, ['*'] = opc.mul, ['/'] = opc.div, ['//'] = opc.idiv, 
-	['%'] = opc.mod, ['^'] = opc.pow,
-	['>'] = opc.gt, ['<'] = opc.lt, ['=='] = opc.eq, ['~='] = opc.ne, ['>='] = opc.ge, ['<='] = opc.le,}
-
-setmetatable( op, {op_map = op_map, __index = function(self,k) return op_map[k] end} )
-
 local function compose( ... )
 	local n = select( '#', ... )
 	if n <= 1 then
@@ -174,26 +202,64 @@ end
 
 local function map( f, t )
 	local t_ = {}
-	for i = 1, #t do
-		t_[i] = f( t[i], i )
-	end
+	for i = 1, #t do t_[i] = f( t[i] ) end
 	return t_
 end
 
 local function mapin( f, t )
-	for i = 1, #t do
-		t[i] = f( t[i], i )
-	end
+	for i = 1, #t do t[i] = f( t[i] ) end
 	return t
 end
 
 local function each( f, t )
-	for i = 1, #t do
-		f( t[i], i )
-	end
+	for i = 1, #t do f( t[i] ) end
 end
 
 local function filter( f, t )
+	local t_, j = {}, 0
+	for i = 1, #t do
+		if f( t[i] ) then
+			j = j + 1
+			t_[j] = t[i]
+		end
+	end
+	return t_
+end
+
+local function foldl( f, acc, t )
+	local acc = acc or 0
+	for i = 1, #t do acc = f( acc, t[i] ) end
+	return acc
+end
+
+local function foldr( f, acc, t )
+	local acc = acc or 0
+	for i = #t, 1, -1 do acc = f( acc, t[i] ) end
+	return acc
+end
+
+local function sum( t, acc )
+	local acc = acc or 0
+	for i = 1, #t do acc = acc + t[i] end
+	return acc
+end
+
+local function imap( f, t )
+	local t_ = {}
+	for i = 1, #t do t_[i] = f( t[i], i ) end
+	return t_
+end
+
+local function imapin( f, t )
+	for i = 1, #t do t[i] = f( t[i], i ) end
+	return t
+end
+
+local function ieach( f, t )
+	for i = 1, #t do f( t[i], i ) end
+end
+
+local function ifilter( f, t )
 	local t_, j = {}, 0
 	for i = 1, #t do
 		if f( t[i], i ) then
@@ -204,75 +270,123 @@ local function filter( f, t )
 	return t_
 end
 
-local function foldl( f, acc, t )
+local function ifoldl( f, acc, t )
 	local acc = acc or 0
-	for i = 1, #t do
-		acc = f( acc, t[i], i )
-	end
+	for i = 1, #t do acc = f( acc, t[i], i ) end
 	return acc
 end
 
-local function foldr( f, acc, t )
+local function ifoldr( f, acc, t )
 	local acc = acc or 0
-	for i = #t, 1, -1 do
-		acc = f( acc, t[i], i )
-	end
+	for i = #t, 1, -1 do acc = f( acc, t[i], i ) end
 	return acc
 end
 
 local function kvmap( f, t )
 	local t_ = {}
-	for k, v in pairs( t ) do
-		t_[k] = f( v, k )
-	end
+	for k, v in pairs( t ) do t_[k] = f( k, v ) end
 	return t_
 end
 
 local function kvmapin( f, t )
-	for k, v in pairs( t ) do
-		t[k] = f( v, k )
-	end
+	for k, v in pairs( t ) do t[k] = f( k, v ) end
 	return t
 end
 
 local function kveach( f, t )
-	for k, v in pairs( t ) do
-		f( v, k )
-	end
+	for k, v in pairs( t ) do f( k, v ) end
 end
 
 local function kvfilter( f, t )
 	local t_ = {}
 	for k, v in pairs( t ) do
-		if f( v, k ) then
-			t_[k] = v
-		end
+		if f( k, v ) then t_[k] = v end
 	end
 	return t_
 end
 
 local function kvfilterin( f, t )
 	for k, v in pairs( t ) do
-		if not f( v, k ) then
-			t[k] = nil
-		end
+		if not f( k, v ) then t[k] = nil end
 	end
 	return t
 end
 
 local function kvreduce( f, acc, t )
 	local acc = acc or 0
-	for k, v in pairs( t ) do
-		acc = f( acc, v, k )
-	end
+	for k, v in pairs( t ) do acc = f( acc, k, v ) end
 	return acc
 end
 
-local function sum( t, acc )
-	local acc = acc or 0
-	for i = 1, #t do
-		acc = acc + t[i]
+local function vkmap( f, t )
+	local t_ = {}
+	for k, v in pairs( t ) do t_[k] = f( v, k ) end
+	return t_
+end
+
+local function vkmapin( f, t )
+	for k, v in pairs( t ) do t[k] = f( v, k ) end
+	return t
+end
+
+local function vkeach( f, t )
+	for k, v in pairs( t ) do f( v, k ) end
+end
+
+local function vkfilter( f, t )
+	local t_ = {}
+	for k, v in pairs( t ) do
+		if f( v, k ) then t_[k] = v end
 	end
+	return t_
+end
+
+local function vkfilterin( f, t )
+	for k, v in pairs( t ) do
+		if not f( v, k ) then t[k] = nil end
+	end
+	return t
+end
+
+local function vkreduce( f, acc, t )
+	local acc = acc or 0
+	for k, v in pairs( t ) do acc = f( acc, v, k ) end
+	return acc
+end
+
+local function vmap( f, t )
+	local t_ = {}
+	for k, v in pairs( t ) do t_[k] = f( v ) end
+	return t_
+end
+
+local function vmapin( f, t )
+	for k, v in pairs( t ) do t[k] = f( v ) end
+	return t
+end
+
+local function veach( f, t )
+	for k, v in pairs( t ) do f( v ) end
+end
+
+local function vfilter( f, t )
+	local t_ = {}
+	for k, v in pairs( t ) do
+		if f( v ) then t_[k] = v end
+	end
+	return t_
+end
+
+local function vfilterin( f, t )
+	for k, v in pairs( t ) do
+		if not f( v ) then t[k] = nil end
+	end
+	return t
+end
+
+local function vreduce( f, acc, t )
+	local acc = acc or 0
+	for k, v in pairs( t ) do acc = f( acc, v ) end
 	return acc
 end
 
@@ -313,9 +427,7 @@ end
 
 local function reverse( t )
 	local t_, n = {}, #t
-	for i = 1, n do
-		t_[i] = t[n-i+1]
-	end
+	for i = 1, n do t_[i] = t[n-i+1] end
 	return t_
 end
 
@@ -366,29 +478,24 @@ end
 
 local function frompairs( t )
 	local t_ = {}
-	for i = 1, #t do
-		t_[t[i][1]] = t[i][2]
-	end
+	for i = 1, #t do t_[t[i][1]] = t[i][2] end
 	return t_
 end
 
-local function recflatten( t, v, i )
-	if type( v ) == 'table' then
-		for j = 1, #v do
-			i = recflatten( t, v[j], i )
-		end
-	else
-		i = i + 1
-		t[i] = v
-	end
-	return i
-end
 
 local function flatten( t )
-	local t_, j = {}, 0
-	for i = 1, #t do
-		j = recflatten( t_, t[i], j )
+	local function recflatten( t, v, i )
+		if type( v ) == 'table' then
+			for j = 1, #v do i = recflatten( t, v[j], i ) end
+		else
+			i = i + 1
+			t[i] = v
+		end
+		return i
 	end
+
+	local t_, j = {}, 0
+	for i = 1, #t do j = recflatten( t_, t[i], j ) end
 	return t_
 end
 
@@ -404,30 +511,22 @@ end
 local function intersect( t1, t2 )
 	local t = {}
 	for k, v in pairs( t1 ) do
-		if t2[k] ~= nil then
-			t[k] = v
-		end
+		if t2[k] ~= nil then t[k] = v end
 	end
 	return t
 end
 
 local function union( t1, t2 )
 	local t = {}
-	for k, v in pairs( t1 ) do
-		t[k] = v
-	end
-	for k, v in pairs( t2 ) do
-		t[k] = v
-	end
+	for k, v in pairs( t1 ) do t[k] = v end
+	for k, v in pairs( t2 ) do t[k] = v end
 	return t
 end
 
 local function difference( t1, t2 )
 	local t = {}
 	for k, v in pairs( t1 ) do
-		if t2[k] == nil then
-			t[k] = v
-		end
+		if t2[k] == nil then t[k] = v end
 	end
 	return t
 end
@@ -440,9 +539,7 @@ end
 
 local function ndiffclock( n, f, ... )
 	local t = os.clock()
-	for i = 1, n do
-		f( ... )
-	end
+	for i = 1, n do f( ... ) end
 	return (os.clock() - t) / n 
 end
 
@@ -457,9 +554,7 @@ local function shuffle( t, f )
 	local f = f or math.random
 	local t_ = {}
 	local n = #t
-	for i = 1, n do
-		t_[i] = t[i]
-	end
+	for i = 1, n do t_[i] = t[i] end
 	for i = n, 1, -1 do
 		local idx = f( i )
 		t_[idx], t_[i] = t_[i], t_[idx]
@@ -467,7 +562,7 @@ local function shuffle( t, f )
 	return t_
 end
 
-local function shuffleinplace( t, f )
+local function shufflein( t, f )
 	local f = f or math.random
 	for i = #t, 1, -1 do
 		local idx = f( i )
@@ -531,6 +626,18 @@ local function pp( ... )
 	io.write('\n')
 end
 
+local function acopy( t )
+	if type( t ) == 'table' then
+		local t_ = {}
+		for i = 1, #t do
+			t_[i] = t[i]
+		end
+		return t_
+	else
+		return t
+	end
+end
+
 local function copy( t )
 	if type( t ) == 'table' then
 		local t_ = {}
@@ -563,9 +670,7 @@ end
 
 local function kvzip( t1, t2 )
 	local t = {}
-	for i = 1, math.min( #t1, #t2 ) do
-		t[t1[i]] = t2[i]
-	end
+	for i = 1, math.min( #t1, #t2 ) do t[t1[i]] = t2[i] end
 	return t
 end
 
@@ -579,28 +684,6 @@ local function kvunzip( t )
 end
 
 local function zip( ... )
-	local n = select( '#', ... )
-	local len = math.huge
-	for i = 1, n do
-		local a = select( i, ... )
-		if #a < len then
-			len = #a
-		end
-	end
-	local t = {}
-	for i = 1, len do
-		t[i] = {}
-	end
-	for i = 1, len do
-		for j = 1, n do
-			local a = select( j, ... )
-			t[i][j] = a[j]
-		end
-	end
-	return t
-end
-
-local function zip( ... )
 	local ts = { ... }
 	local t = {}
 	if ts[1] then
@@ -610,9 +693,7 @@ local function zip( ... )
 		end
 		for i = 1, nrows do
 			local t_ = {}
-			for j = 1, ncols do
-				t_[j] = ts[j][i]
-			end
+			for j = 1, ncols do t_[j] = ts[j][i] end
 			t[i] = t_
 		end
 	end
@@ -624,13 +705,9 @@ local function unzip( t )
 	local unpack = table.unpack or unpack
 	if #t > 0 and type( t[1] ) == 'table' then
 		local n = #t[1]
+		for i = 1, n do t_[i] = {} end
 		for i = 1, n do
-			t_[i] = {}
-		end
-		for i = 1, n do
-			for j = 1, #t do
-				t_[i][j] = t[j][i]
-			end
+			for j = 1, #t do t_[i][j] = t[j][i] end
 		end
 	end
 	return unpack( t_ )
@@ -659,30 +736,23 @@ local function permutations( input )
 	return recpermute( 1 )
 end
 
-local function boolnew( n )
-	local t = {}
-	if type( n ) == 'number' then
-		for i = 1, n do
-			t[i] = false
-		end
-	elseif type( n ) == 'string' then
-		for i = 1, #n do
-			t[i] = n:sub(i,i) == '1'
-		end
-	end
-	return t
-end
+local function combinations( ts )
+	local n, t, acc = #ts, {}, {}
 
-local function booltonumber( b )
-	local acc = 0
-	for i = 1, #b do
-		acc = b[i]*2^(i-1)
+	local function reccombine( i )
+		if i > n then
+			acc[#acc+1] = copy( t )
+		else
+			local c = ts[i]
+			for j = 1, #c do
+				t[#t+1] = c[j]
+				reccombine( i+1 )
+				t[#t] = nil
+			end
+		end
 	end
+	reccombine( 1 )
 	return acc
-end
-
-local function combinations( input, count )
-	error('unimplemented')
 end
 
 local function unique( t )
@@ -736,29 +806,50 @@ functions = {
 	opc = opc,
 	equal = equal,
 	compose = compose,
-	kvmap = kvmap,
-	kvfilter = kvfilter,
-	map = map,
-	filter = filter,
-
-	kvmapin = kvmapin,
-	kvfilterin = kvfilterin,
-	mapin = mapin,
-
-	kveach = kveach,
-	each = each,
-	traverse = traverse,
 	
-	kvreduce = kvreduce,
+	map = map,
+	mapin = mapin,
+	each = each,
+	filter = filter,
 	foldl = foldl,
 	foldr = foldr,
 	sum = sum,
+
+	imap = imap,
+	imapin = imapin,
+	ieach = ieach,
+	ifilter = ifilter,
+	ifoldl = ifoldl,
+	ifoldr = ifoldr,
+
+	vmap = vmap,
+	vmapin = vmapin,
+	veach = veach,
+	vfilter = vfilter,
+	vfilterin = vfilterin,
+	vreduce = vreduce,
+	
+	vkmap = vkmap,
+	vkmapin = vkmapin,
+	vkeach = vkeach,
+	vkfilter = vkfilter,
+	vkfilterin = vkfilterin,
+	vkreduce = vkreduce,
+	
+	kvmap = kvmap,
+	kvmapin = kvmapin,
+	kveach = kveach,
+	kvfilter = kvfilter,
+	kvfilterin = kvfilterin,
+	kvreduce = kvreduce,
+
+	traverse = traverse,
 
 	range = range,
 	slice = slice,
 	reverse = reverse,
 	shuffle = shuffle,
-	shuffleinplace = shuffleinplace,
+	shufflein = shufflein,
 	
 	nkeys = nkeys,
 	indexof = indexof,
@@ -776,6 +867,7 @@ functions = {
 
 	unique = unique,
 
+	acopy = acopy,
 	copy = copy,
 	deepcopy = deepcopy,
 	
