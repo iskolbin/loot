@@ -109,7 +109,9 @@ local op; op = {
 	const = function( x ) return x end,
 	newtable = newtable,
 	call = function( x, y ) return x( y ) end,
-	passarg = function( x, y ) return y( x ) end,
+	fun = function( x, y ) return y( x ) end,
+	selfcall = function( x, y ) return x[y](x) end,
+	selffun = function( x, y ) return y[x](y) end,
 	c = setmetatable( {}, {
 		__index = function( self, k )
 			if not opc[k] then
