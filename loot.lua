@@ -326,18 +326,10 @@ local function xrange( init, limit, step )
 end
 
 local function slice( t, init, limit, step )
-	local init, limit, step = init, limit, step or 1
-	if not limit then
-		init, limit = 1, init
-	end
+	local init, limit, step = init, limit or #t, step or 1
 
-	if init < 0 then
-		init = #t + init + 1
-	end
-
-	if limit < 0 then
-		limit = #t + limit + 1
-	end
+	if init < 0 then init = #t + init + 1 end
+	if limit < 0 then limit = #t + limit + 1 end
 
 	local t_, j = {}, 0
 	for i = init, limit, step do
@@ -723,14 +715,16 @@ end
 local functions
 
 local function export( ... )
+	local unpack = table.unpack or unpack
 	local n = select( '#', ... )
 	if n == 0 then
 		for k, v in pairs( functions ) do	_G[k] = v end
 	else
+		local f = {}
 		for i = 1, n do
-			local k = select( i, ... )
-			_G[k] = functions[k]
+			f[i] = functions[select( i, ... )]
 		end
+		return unpack( f )
 	end
 end
 
