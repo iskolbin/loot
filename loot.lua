@@ -29,7 +29,7 @@ local function isid( s )
 	return type( s ) == 'string' and s:match('[%a_][%w_]*') == s
 end
 
-local memoize = function( closure, mode )
+local function memoize( closure, mode )
 	local cache
 	cache = setmetatable( {}, {
 		__mode = mode, 
@@ -45,18 +45,19 @@ local memoize = function( closure, mode )
 	return cache
 end
 
-local function newtable( size )
+local function newtable( size, init )
+	local init = init or false
 	if not size or size <= 0 then return {}
-	elseif size == 1 then return {false}
-	elseif size == 2 then return {false,false}
-	elseif size == 3 then return {false,false,false}
-	elseif size == 4 then return {false,false,false,false}
-	elseif size == 5 then return {false,false,false,false,false}
-	elseif size == 6 then return {false,false,false,false,false,false}
-	elseif size == 7 then return {false,false,false,false,false,false,false}
+	elseif size == 1 then return {init}
+	elseif size == 2 then return {init,init}
+	elseif size == 3 then return {init,init,init}
+	elseif size == 4 then return {init,init,init,init}
+	elseif size == 5 then return {init,init,init,init,init}
+	elseif size == 6 then return {init,init,init,init,init,init}
+	elseif size == 7 then return {init,init,init,init,init,init,init}
 	elseif size >= 8 then 
-		local t = {false,false,false,false,false,false,false,false}
-		for i = 9,size do t[i] = false end
+		local t = {init,init,init,init,init,init,init,init}
+		for i = 9,size do t[i] = init end
 		return t
 	end
 end
@@ -122,20 +123,20 @@ local op; op = {
 	})
 }
 
-local cand = function( x, y )
+local function cand( x, y )
 	return function( ... ) return x(...) and y(...) end
 end
 
-local cor = function( x, y )
+local function cor( x, y )
 	return function( ... ) return x(...) or y(...) end
 end
 
-local cnot = function( x )
+local function cnot( x )
 	return function( ... ) return not x( ... ) end
 end
 
 local function append( t1, t2, inplace )
-	local t, n = inplace and t1 or copy(t1), #t1
+	local t, n = inplace and t1 or deepcopy(t1), #t1
 	for i = 1, #t2 do t[i+n] = t2[i] end
 	return t
 end
@@ -148,7 +149,7 @@ local function prepend( t1, t2, inplace )
 		for i = 1, m do t1[i] = t2[i] end
 		return t1
 	else
-		local t = copy( t2 )
+		local t = deepcopy( t2 )
 		for i = 1, n do t[i+m] = t1[i] end
 		return t
 	end
@@ -173,8 +174,8 @@ local function compose( fs )
 	local n = #fs
 	if n <= 1 then return fs[1]
 	elseif n == 2 then local f1,f2 = fs[1],fs[2]; return function(...) return f2(f1(...))end
-	elseif n == 3 then local f1,f2,f3 = fs[1],fs[2],fs[3]; return function(...) return f3(f2( f1(...)))end
-	elseif n == 4 then local f1,f2,f3,f4 = fs[1],fs[2],fs[3],fs[4]; return function(...) return f4(f3(f2( f1(...))))end
+	elseif n == 3 then local f1,f2,f3 = fs[1],fs[2],fs[3]; return function(...) return f3(f2(f1(...)))end
+	elseif n == 4 then local f1,f2,f3,f4 = fs[1],fs[2],fs[3],fs[4]; return function(...) return f4(f3(f2(f1(...))))end
 	else
 		local f1,f2,f3,f4,f5 = fs[1],fs[2],fs[3],fs[4],fs[5]
 		if n <= 5 then return function(...) return f5(f4(f3(f2(f1(...))))) end
@@ -184,6 +185,19 @@ local function compose( fs )
 			return y
 		end end
 	end
+end
+
+local function pipe( x, ... )
+	local y = x
+	for i = 1, select( '#', ... ) do
+		local f = select( i, ... )
+		local tf = type( f )
+		if tf == 'table' then y = f[1](y, table.unpack(f,2))
+		elseif tf == 'function' then y = f(y)
+		else error( 'pipe arguments have to be unary functions or tables {f,arg2,arg3,...}')
+		end
+	end
+	return y
 end
 
 local function map( t, f, mode )
@@ -339,12 +353,20 @@ local function slice( t, init, limit, step )
 	return t_
 end
 
-local function inject( t1, t2, pos )
+local function inject( t1, t2, pos, inplace )
 	local pos = pos < 0 and #t1 + pos + 1 or pos
-	if pos <= 1 then return append( t2, t1 )
-	elseif pos >= #t1 then return append( t1, t2 )
+	if pos <= 1 then return prepend( t1, t2, inplace )
+	elseif pos >= #t1 then return append( t1, t2, inplace )
 	else return append( append( slice( t1, pos-1 ), t2 ), slice( t1, pos, -1 ))
 	end
+end
+
+local function update( t, args, inplace )
+	local t = inplace and t or deepcopy( t )
+	for k, v in pairs( args ) do
+		t[k] = v
+	end
+	return t
 end
 
 local function reverse( t )
@@ -354,37 +376,54 @@ local function reverse( t )
 end
 
 local function sorted( t, f, inplace )
-	local t_ = inplace and t or copy( t, true )
+	local t_ = inplace and t or deepcopy( t, true )
 	table.sort( t_, f )
 	return t_ 
 end
 
-local function indexof( t, v, fcmp )
-	if not fcmp then
-		for i = 1, #t do
-			if t[i] == v then return i end
+local function indexof( t, v, fcmp, feq )
+	if not feq then
+		if not fcmp then
+			for i = 1, #t do if t[i] == v then return i end end
+		else
+			local function defaultcmp( a, b ) return a < b end
+			local init, limit = 1, #t, 0
+			local f = type(fcmp) == 'function' and fcmp or defaultcmp
+			local floor = math.floor
+			while init <= limit do
+				local mid = floor( 0.5*(init+limit))
+				local v_ = t[mid]
+				if v == v_ then return mid
+				elseif f( v, v_ ) then limit = mid - 1
+				else init = mid + 1
+				end
+			end
 		end
 	else
-		local function defaultcmp( a, b ) 
-			return a < b 
-		end
-		local init, limit = 1, #t, 0
-		local f = type(fcmp) == 'function' and fcmp or defaultcmp
-		local floor = math.floor
-		while init <= limit do
-			local mid = floor( 0.5*(init+limit))
-			local v_ = t[mid]
-			if v == v_ then return mid
-			elseif f( v, v_ ) then limit = mid - 1
-			else init = mid + 1
+		if not fcmp then
+			for i = 1, #t do if feq( t[i], v ) then return i end end
+		else
+			local function defaultcmp( a, b ) return a < b end
+			local init, limit = 1, #t, 0
+			local f = type(fcmp) == 'function' and fcmp or defaultcmp
+			local floor = math.floor
+			while init <= limit do
+				local mid = floor( 0.5*(init+limit))
+				local v_ = t[mid]
+				if feq( v, v_ ) then return mid
+				elseif f( v, v_ ) then limit = mid - 1
+				else init = mid + 1
+				end
 			end
 		end
 	end
 end
 
-local function keyof( t, v )
-	for k, v_ in pairs( t ) do
-		if v_ == v then return k end
+local function keyof( t, v, feq )
+	if not feq then
+		for k, v_ in pairs( t ) do if v_ == v then return k end end
+	else
+		for k, v_ in pairs( t ) do if feq( v_, v ) then return k end end
 	end
 end
 
@@ -472,7 +511,7 @@ end
 local function shuffle( t, f, inplace )
 	local f = f or math.random
 	local n = #t
-	local t_ = inplace and t or copy( t ) 
+	local t_ = inplace and t or deepcopy( t ) 
 	for i = n, 1, -1 do
 		local idx = f( i )
 		t_[idx], t_[i] = t_[i], t_[idx]
@@ -735,6 +774,7 @@ functions = {
 	equal = equal,
 	curry = curry,
 	compose = compose,
+	pipe = pipe,
 	cand = cand,
 	cor = cor,
 	cnot = cnot,
@@ -758,7 +798,8 @@ functions = {
 	inject = inject,
 	reverse = reverse,
 	shuffle = shuffle,
-	
+	update = update,
+
 	nkeys = nkeys,
 	indexof = indexof,
 	keyof = keyof,
@@ -788,7 +829,10 @@ functions = {
 	kvunzip = kvunzip,
 	zip = zip,
 	unzip = unzip,
-	
+
+	unpack = table.unpack or unpack,
+	pack = table.pack or function(...) local t = {...}; t.n = #t; return t end,
+
 	diffclock = diffclock,
 	ndiffclock = ndiffclock,
 	diffmemory = diffmemory,
