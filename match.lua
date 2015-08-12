@@ -1,4 +1,4 @@
-require('loot').export('slice','copy','pp','serialize')
+local slice, copy, pp, serialize = require('loot').export('slice','copy','pp','serialize')
 
 local VarMT = {__tostring = function( self ) return self.name end}
 
@@ -91,7 +91,7 @@ local function matcher( clauses )
 					kvars[#kvars+1] = v.name
 					vvars[#vvars+1] = 't' .. pathtostr( path[1] )
 					captures[#captures+1] = ('%s=%s'):format( v.name, v.name )
-					if not clauses.notypecheck then typecheckcond[#typecheckcond+1] = '(type(t' .. pathtostr( slice( path[1],-2) ) .. ')=="table")' end
+					if not clauses.notypecheck then typecheckcond[#typecheckcond+1] = '(type(t' .. pathtostr( slice( path[1],1,-2) ) .. ')=="table")' end
 				end
 			end
 
@@ -106,7 +106,7 @@ local function matcher( clauses )
 				local x = getbypath( clause, paths[j] )
 				if not( getmetatable( x ) == VarMT and x.wild ) and not varpaths[paths[j]] then
 					if not clauses.notypecheck then
-						typecheckcond[#typecheckcond+1] = '(type(t' .. pathtostr( slice( paths[j],-2) ) .. ')=="table")'
+						typecheckcond[#typecheckcond+1] = '(type(t' .. pathtostr( slice( paths[j],1,-2) ) .. ')=="table")'
 					end
 					cond[#cond+1] = '( t' .. pathtostr( paths[j] ) .. ' == ' .. tostring( getbypath( clause, paths[j] )) .. ' )'
 				end
