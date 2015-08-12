@@ -286,7 +286,7 @@ local function filter( t, f, mode )
 end
 
 local function reduce( t, f, acc, mode )
-	local acc = acc or 0
+	local acc = acc ~= nil and acc or 0
 	if not mode or mode == 'l' then
 		for i = 1, #t do acc = f( acc, t[i] ) end
 	elseif mode == 'v' then
