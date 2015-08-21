@@ -200,118 +200,53 @@ local function pipe( x, ... )
 	return y
 end
 
-local function map( t, f, mode )
-	local t_
-	if not mode or mode == '' then
-		t_ = {}; for i = 1, #t do t_[i] = f( t[i] ) end
-	elseif mode == 'v' then
-		t_ = {}; for k, v in pairs( t ) do t_[k] = f( v ) end
-	elseif mode == '!' then
-		for i = 1, #t do t[i] = f( t[i] ) end
-	elseif mode == 'i' then
-		t_ = {}; for i = 1, #t do t_[i] = f( t[i], i ) end
-	elseif mode == 'i!' then
-		for i = 1, #t do t_[i] = f( t[i], i ) end
-	elseif mode == 'v!' then
-		for k, v in pairs( t ) do t[k] = f( v ) end
-	elseif mode == 'vk' then
-		t_ = {}; for k, v in pairs( t ) do t_[k] = f( v, k ) end
-	elseif mode == 'vk!' then
-		for k, v in pairs( t ) do t[k] = f( v, k ) end
-	elseif mode == 'k' then
-		t_ = {}; for k, v in pairs( t ) do t_[k] = f( k ) end
-	elseif mode == 'k!' then
-		for k, v in pairs( t ) do t[k] = f( k ) end
-	elseif mode == 'kv' then
-		t_ = {}; for k, v in pairs( t ) do t_[k] = f( k, v ) end
-	elseif mode == 'kv!' then
-		for k, v in pairs( t ) do t[k] = f( k, v ) end
-	else
-		error( 'mode(3rd parameter) have to be nil or one of "!", "i", "i!", "k", "k!", "v", "v!", "kv", "kv!", "vk", "vk!"')
-	end
-	return t_ or t
-end
 
-local function each( t, f, mode )
-	if not mode or mode == '' then
-		for i = 1, #t do f( t[i] ) end
-	elseif mode == 'v' then
-		for k, v in pairs( t ) do f( v ) end
-	elseif mode == 'i' then
-		for i = 1, #t do f( t[i], i ) end
-	elseif mode == 'vk' then
-		for k, v in pairs do f( v, k ) end
-	elseif mode == 'k' then
-		for k, v in pairs( t ) do f( k ) end
-	elseif mode == 'kv' then
-		for k, v in pairs( t ) do f( k, v ) end
-	else
-		error( 'mode(3rd parameter) have to be nil or one of "i", "k", "v", "kv", "vk"')
-	end
-end
+local function map( t, f )   local t_ = {}; for i = 1, #t do t_[i] = f( t[i] ) end return t_ end
+local function imap( t, f )  local t_ = {}; for i = 1, #t do t_[i] = f( t[i], i ) end return t_ end
+local function vmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v ) end return t_ end
+local function kmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k ) end return t_ end
+local function kvmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k, v ) end return t_ end
+local function vkmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v, k ) end return t_ end
 
-local function filter( t, f, mode )
-	local t_
-	local j = 0
-	if not mode or mode == '' then
-		t_ = {}; for i = 1, #t do if f( t[i] ) then j = j + 1; t_[j] = t[i] end end
-	elseif mode == 'v' then
-		t_ = {}; for k, v in pairs( t ) do if f( v ) then t_[k] = v end end
-	elseif mode == '!' then
-		for i = 1, #t do if f( t[i] ) then j = j + 1; t[j] = t[i] end end
-		for i = j+1, #t do t[i] = nil end
-	elseif mode == 'i' then
-		t_ = {}; for i = 1, #t do if f( t[i], i ) then j = j + 1; t_[j] = t[i] end end
-	elseif mode == 'i!' then
-		for i = 1, #t do if f( t[i], i ) then j = j + 1; t[j] = t[i] end end
-		for i = j+1, #t do t[i] = nil end
-	elseif mode == 'v!' then
-		for k, v in pairs( t ) do if not f( v ) then t[k] = nil end end
-	elseif mode == 'vk' then
-		t_ = {}; for k, v in pairs( t ) do if f( v, k ) then t_[k] = v end end
-	elseif mode == 'vk!' then
-		for k, v in pairs( t ) do if not f( v, k ) then t[k] = v end end
-	elseif mode == 'k' then
-		t_ = {}; for k, v in pairs( t ) do if f( k ) then t_[k] = v end end
-	elseif mode == 'k!' then
-		for k, v in pairs( t ) do if not f( k ) then t[k] = nil end end
-	elseif mode == 'kv' then
-		t_ = {}; for k, v in pairs( t ) do if f( k, v ) then t_[k] = v end end
-	elseif mode == 'kv!' then
-		for k, v in pairs( t ) do if not f( k, v ) then t[k] = v end end
-	else
-		error( 'mode(3rd parameter) have to be nil or one of "!", "i", "i!", "k", "k!", "v", "v!", "kv", "kv!", "vk", "vk!"')
-	end	
-	return t_ or t
-end
+local function mapx( t, f )   for i = 1, #t do t[i] = f( t[i] ) end return t end
+local function imapx( t, f )  for i = 1, #t do t[i] = f( t[i], i ) end return t end
+local function vmapx( t, f )  for k,v in pairs( t ) do t[k] = f( v ) end return t end
+local function kmapx( t, f )  for k,v in pairs( t ) do t[k] = f( k ) end return t end
+local function kvmapx( t, f ) for k,v in pairs( t ) do t[k] = f( k, v ) end return t end
+local function vkmapx( t, f ) for k,v in pairs( t ) do t[k] = f( v, k ) end return t end
 
-local function reduce( t, f, acc, mode )
-	local acc = acc ~= nil and acc or 0
-	if not mode or mode == 'l' then
-		for i = 1, #t do acc = f( acc, t[i] ) end
-	elseif mode == 'v' then
-		for k, v in pairs( t ) do acc = f( acc, v ) end
-	elseif mode == 'i' or mode == 'li' then
-		for i = 1, #t do acc = f( acc, t[i], i ) end
-	elseif mode == 'vk' then
-		for k, v in pairs( t ) do acc = f( acc, v, k ) end
-	elseif mode == 'r' then
-		for i = #t, 1, -1 do acc = f( acc, t[i] ) end
-	elseif mode == 'ri' then
-		for i = #t, 1, -1 do acc = f( acc, t[i], i ) end
-	elseif mode == 'k' then
-		for k, v in pairs( t ) do acc = f( acc, k ) end
-	elseif mode == 'kv' then
-		for k, v in pairs( t ) do acc = f( acc, k, v ) end
-	end
-	return acc
-end
+local function each( t, f )   for i = 1, #t do f( t[i] ) end end
+local function ieach( t, f )  for i = 1, #t do f( t[i], i ) end end
+local function veach( t, f )  for k,v in pairs( t ) do f( v ) end end
+local function keach( t, f )  for k,v in pairs( t ) do f( k ) end end
+local function kveach( t, f ) for k,v in pairs( t ) do f( k, v ) end end
+local function vkeach( t, f ) for k,v in pairs( t ) do f( v, k ) end end
 
-local function sum( t, acc )
-	local acc = acc or 0
-	for i = 1, #t do acc = acc + t[i] end
-	return acc
-end
+local function filter( t, f )   local t_,j = {},0; for i = 1, #t do if f( t[i] ) then j = j + 1; t_[j] = t[i] end end return t_ end
+local function ifilter( t, f )  local t_,j = {},0; for i = 1, #t do if f( t[i], i ) then j = j + 1; t_[j] = t[i] end end return t_ end
+local function vfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( v ) then t_[k] = v end end return t_ end
+local function kfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( k ) then t_[k] = v end end return t_ end
+local function kvfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( k, v ) then t_[k] = v end end return t_ end
+local function vkfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( v, k ) then t_[k] = v end end return t_ end
+
+local function filterx( t, f )   local j = 0; for i = 1, #t do if f( t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function ifilterx( t, f )  local j = 0; for i = 1, #t do if f( t[i],i ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function vfilterx( t, f )  for k,v in pairs( t ) do if not f( v ) then t[k] = nil end end return t end
+local function kfilterx( t, f )  for k,v in pairs( t ) do if not f( k ) then t[k] = nil end end return t end
+local function kvfilterx( t, f ) for k,v in pairs( t ) do if not f( k, v ) then t[k] = nil end end return t end
+local function vkfilterx( t, f ) for k,v in pairs( t ) do if not f( v, k ) then t[k] = nil end end return t end
+
+local function foldl( t, f, acc )  local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( t[i], acc ) end return acc end
+local function ifoldl( t, f, acc ) local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( t[i], i, acc ) end return acc end
+local function foldr( t, f, acc )  local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( t[i], acc ) end return acc end
+local function ifoldr( t, f, acc ) local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( t[i], i, acc ) end return acc end
+local function vfold( t, f, acc )  local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( v, acc ) end return acc end
+local function kfold( t, f, acc )  local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( k, acc ) end return acc end
+local function vkfold( t, f, acc ) local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( v, k, acc ) end return acc end
+local function kvfold( t, f, acc ) local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( k, v, acc ) end return acc end
+
+local function sum( t, acc ) local acc = acc or 0;  for i = 1, #t do acc = acc + t[i] end;  return acc end
+local function product( t, acc ) local acc = acc or 1;  for i = 1, #t do acc = acc * t[i] end;  return acc end
 
 local function range( init, limit, step )
 	local init, limit, step = init, limit, step or 1
@@ -780,11 +715,14 @@ functions = {
 	cnot = cnot,
 	swap = swap,
 
-	map = map,
-	each = each,
-	filter = filter,
-	reduce = reduce,
+	map = map, imap = imap, vmap = vmap, kmap = kmap, vkmap = vkmap, kvmap = kvmap,
+	mapx = mapx, imapx = imapx, vmapx = vmapx, kmapx = kmapx, vkmapx = vkmapx, kvmapx = kvmapx,
+	filter = filter, ifilter = ifilter, vfilter = vfilter, kfilter = kfilter, vkfilter = vkfilter, kvfilter = kvfilter,
+	foldl = foldl, foldr = foldr, ifoldl = ifoldl, ifoldr = ifoldr, kfold = kfold, vfold = vfold, vkfold = vkfold, kvfold = kvfold,
+	each = each, ieach = ieach, veach = veach, keach = keach, vkeach = vkeach, kveach = kveach,
+	
 	sum = sum,
+	product = product,
 	count = count,
 
 	traverse = traverse,

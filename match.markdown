@@ -68,14 +68,16 @@ local function isstraight( C )
 end
 
 local matcher = match{
-	{{{13,Y},{12,Y},{11,Y},{10,Y},{9,Y},R}, P"Royal flush or %{Y}"},
-	{{w02,{X1,Y},{X2,Y},{X3,Y},{X4,Y},{X5,Y},R}, P"Straight %{X1} flush or %{Y}", isstraight},
+	{{w02,{13,Y},w02,{12,Y},w02,{11,Y},w02,{10,Y},w02,{9,Y},R}, P"Royal flush of %{Y}"},
+	{{w02,{X1,Y},w02,{X2,Y},w02,{X3,Y},w02,{X4,Y},w02,{X5,Y},R}, P"Straight %{X1} flush of %{Y}", isstraight},
+	{{w02,{13,Y},w02,{4,Y},w02,{3,Y},w02,{2,Y},w02,{1,Y},R}, P"Straight 4 flush of %{Y}"},
 	{{{K1,_},w02,{X1,_},{X1,_},{X1,_},{X1,_},R}, P"Four %{X1} with %{K1} kicker"},
 	{{{X1,_},{X1,_},{X1,_},{X1,_},{K1,_},R}, P"Four %{X1} with %{K1} kicker"},
 	{{w02,{X1,_},{X1,_},{X1,_},w02,{X2,_},{X2,_},R}, P"Full %{X1} house of %{X2}"},
 	{{w02,{X1,_},{X1,_},w02,{X2,_},{X2,_},{X2,_},R}, P"Full %{X2} house of %{X1}"},
 	{{w02,{K1,Y},w02,{K2,Y},w02,{K3,Y},w02,{K4,Y},w02,{K5,Y},R}, P"Flush of %{Y}"},
-	{{w02,{X1,_},{X2,_},{X3,_},{X4,_},{X5,_},R}, P"Straight of %{X1}", isstraight },
+	{{w02,{X1,_},w02,{X2,_},w02,{X3,_},w02,{X4,_},w02,{X5,_},R}, P"Straight of %{X1}", isstraight },
+	{{w02,{13,_},w02,{4,_},w02,{3,_},w02,{2,_},w02,{1,_},R}, P"Straight of 4"},
 	{{{K1,_},{K2,_},w02,{X1,_},{X1,_},{X1,_},R}, P"Three %{X1} with %{K1},%{K2} kickers"},
 	{{{X1,_},{X1,_},{X1,_},{K1,_},{K2,_},R}, P"Three %{X1} with %{K1},%{K2} kickers"},
 	{{{K1,_},w02,{X1,_},{X1,_},w02,{X2,_},{X2,_},R}, P"Two pairs of %{X1} and %{X2} with %{K1} kicker"},
