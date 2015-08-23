@@ -71,7 +71,7 @@ Lua ootility toolbox
 * cand( |x -> v|, |x -> z|, ... )
 * cor( |x -> v|, |x -> z|, ... )
 * cnot( |... -> v| )
-* pipe( x, {|x,... -> y|, |y,... -> z|, ...}  )
+* pipe( x, {{|x,a... -> y|,a...}, {|y,b... -> z|,b...}, ...}  )
 
 ## Map
 * map( array, |a -> z| )		
