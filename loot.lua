@@ -809,7 +809,7 @@ local function xtostring( x, tables, identSymbol )
 				for k, vv in pairs( v ) do
 					if not arr[k] then
 						if type( k ) == 'string' and k:match('[%a_][%w_]*') == k then
-							buff[#buff+1] = ('%s%s = %s'):format( ident and ('\n' .. identSymbol:rep(ident)) or '', k, serialize( vv, ident and (ident + 1)))
+							buff[#buff+1] = ('\n%s%s = %s'):format( ident and identSymbol:rep(ident) or '', k, serialize( vv, ident and (ident + 1)))
 						else
 							buff[#buff+1] = ('%s[%s] = %s'):format( ident and identSymbol:rep(ident) or '', serialize( k, ident ), serialize( vv, ident ))
 						end
@@ -821,7 +821,7 @@ local function xtostring( x, tables, identSymbol )
 			end
 		end
 	end
-	return serialize( x )
+	return serialize( x, 0 )
 end
 
 local function pp( ... )
@@ -833,7 +833,7 @@ local function pp( ... )
 		if type( x ) == 'table' and i > 1 then
 			io.write( '\n' )
 		end	
-		io.write( xtostring( x ) )
+		io.write( xtostring( x,{},'  ' ) )
 		if i < n then
 			io.write( type(x) == 'table' and '\n' or '\t' )
 		end
