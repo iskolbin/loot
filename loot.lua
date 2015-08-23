@@ -1,58 +1,8 @@
 local tunpack, pairs, next, type, select, getmetatable, setmetatable = table.unpack or unpack, pairs, next, type, select, getmetatable, setmetatable
 
-local any = {}
+local functions
 
-local CaptureMT = {}
-
-local function capture( name, predicate, transform )
-	return setmetatable( {name, predicate, transform}, CaptureMT )
-end
-
-local function swap( x, y )
-	return y, x
-end
-
-local function nkeys( t )
-	local len = 0
-	for k, v in pairs( t ) do len = len + 1 end
-	return len
-end
-
-local function equal( x, y, captures )
-	if x == y or x == any or y == any then
-		return true
-	elseif getmetatable( x ) == CaptureMT then
-		if captures then
-			if (not x[2] or x[2](y)) then
-				captures[x[1]] = not x[3] and y or x[3](y)
-			end
-		end
-		return true
-	elseif type(x) == 'table' and type(y) == 'table' and nkeys( x ) == nkeys( y ) then
-		for k, v in pairs( x ) do
-			if y[k] == nil or not equal( v, y[k], captures ) then
-				return false
-			end
-		end
-		return true
-	else
-		return false
-	end
-end
-
-local function match( x, y )
-	local captures = {}
-	if equal( x, y, captures ) then
-		return captures
-	else
-		return false
-	end
-end
-
-local function isid( s )
-	return type( s ) == 'string' and s:match('[%a_][%w_]*') == s
-end
-
+-- Memoization
 local function memoize( closure, mode )
 	local cache
 	cache = setmetatable( {}, {
@@ -69,25 +19,99 @@ local function memoize( closure, mode )
 	return cache
 end
 
-local function newtable( size, init )
-	local init = init or false
-	if not size or size <= 0 then return {}
-	elseif size == 1 then return {init}
-	elseif size == 2 then return {init,init}
-	elseif size == 3 then return {init,init,init}
-	elseif size == 4 then return {init,init,init,init}
-	elseif size == 5 then return {init,init,init,init,init}
-	elseif size == 6 then return {init,init,init,init,init,init}
-	elseif size == 7 then return {init,init,init,init,init,init,init}
-	elseif size >= 8 then 
-		local t = {init,init,init,init,init,init,init,init}
-		for i = 9,size do t[i] = init end
-		return t
+
+-- Matching
+local wild = {}
+
+local function capture( name, predicate, transform ) return setmetatable( {name, predicate, transform}, wild ) end
+
+local function equal( x, y, partial, captures )
+	if x == y or x == wild or y == wild then
+		return true
+	elseif getmetatable( y ) == wild then
+		if captures then
+			if (not y[2] or y[2](x)) then
+				captures[y[1]] = not y[3] and x or y[3](x)
+			end
+		end
+		return true
+	elseif type(x) == 'table' and type(y) == 'table' then
+		local nx, ny = 0, 0
+		for k, v in pairs( x ) do nx = nx + 1 end
+		for k, v in pairs( y ) do ny = ny + 1 end
+		if nx == ny or (partial and nx >= ny) then
+			for k, v in pairs( x ) do
+				if y[k] == nil or not equal( v, y[k], partial, captures ) then
+					return false
+				end
+			end
+			return true
+		else
+			return false
+		end
+	else
+		return false
 	end
 end
 
-local opc = {}
-local op; op = {
+local function match( x, y, partial )
+	local captures = {}
+	if equal( x, y, partial, captures ) then
+		return captures
+	else
+		return false
+	end
+end
+
+
+-- Predicates
+local pcache = {}
+
+local predicates = {
+	n = function( y ) return y == nil end,
+	t = function( y ) return y == true end,
+	f = function( y ) return y == false end,
+	boolean = function( y ) return type( y ) == 'boolean' end,
+	number = function( y ) return type( y ) == 'number' end,
+	integer = function( y ) return math.floor( y ) == y end,
+	string = function( y ) return type( y ) == 'string' end,
+	table = function( y ) return type( y ) == 'table' end,
+	lambda = function( y ) return type( y ) == 'function' end,
+	thread = function( y ) return type( y ) == 'thread' end,
+	userdata = function( y ) return type( y ) == 'userdata' end,
+	zero = function( y ) return y == 0 end,
+	positive = function( y ) return y > 0 end,
+	negative = function( y ) return y < 0 end,
+	even = function( y ) return y % 2 == 0 end,
+	odd = function( y ) return y % 2 == 1 end,
+	id = function( y ) return type( y ) == 'string' and y:match('[%a_][%w_]*') == y end
+}
+
+
+-- Testing predicates
+local is = setmetatable( {}, {__index = function( self, k ) 
+	local p = predicates[k]
+	if not p then error( ('Predicate not defined %q'):format( k )) end
+	return predicates[k] 
+end} )
+
+local isnot = setmetatable( {}, {__index = function( self, k ) 
+	local p = predicates[k]
+	if not p then error( ('Predicate not defined %q'):format( k )) end
+	if not pcache[k] then
+		pcache[k] = function( y ) return not p(y) end
+	end
+	return pcache[k]
+end } )
+
+local function all( t, f ) for k, v in pairs( t ) do if not f( v ) then return false end end return true end
+local function any( t, f ) for k, v in pairs( t ) do if f( v ) then return true end end return false end
+
+
+-- Operators
+local opcache = {}
+
+local op = {
 	add = function( x, y ) return x + y end,
 	sub = function( x, y ) return x - y end,
 	div = function( x, y ) return x / y end,
@@ -103,18 +127,6 @@ local op; op = {
 	dec = function( x ) return x - 1 end,
 	concat = function( x, y ) return x .. y end,
 	lconcat = function( x, y ) return y .. x end,
-	isid = isid,
-	isnil = function( y ) return y == nil end,
-	isnotnil = function( y ) return y ~= nil end,
-	istrue = function( y ) return y == true end,
-	isfalse = function( y ) return y == false end,
-	isnumber = function( y ) return type( y ) == 'number' end,
-	isstring = function( y ) return type( y ) == 'string' end,
-	istable = function( y ) return type( y ) == 'table' end,
-	isfunction = function( y ) return type( y ) == 'function' end,
-	isthread = function( y ) return type( y ) == 'thread' end,
-	isuserdata = function( y ) return type( y ) == 'userdata' end,
-	isboolean = function( y ) return type( y ) == 'boolean' end,
 	lor = function( x, y ) return x or y end,
 	land = function( x, y ) return x and y end,
 	lnot = function( x ) return not x end,
@@ -124,35 +136,27 @@ local op; op = {
 	le = function( x, y ) return x <= y end,
 	eq = function( x, y ) return x == y end,
 	ne = function( x, y ) return x ~= y end,
-	positive = function( x ) return x > 0 end,
-	negative = function( x ) return x < 0 end,
-	even = function( x ) return x % 2 == 0 end,
-	odd = function( x ) return x % 2 == 1 end,
-	index = function( x, y ) return x[y] end,
-	item = function( x, y ) return y[x] end,
-	equal = equal,
+	at = function( x, y ) return x[y] end,
+	of = function( x, y ) return y[x] end,
 	const = function( x ) return x end,
-	newtable = newtable,
 	call = function( x, y ) return x( y ) end,
 	fun = function( x, y ) return y( x ) end,
 	selfcall = function( x, y ) return x[y](x) end,
 	selffun = function( x, y ) return y[x](y) end,
-	c = setmetatable( {}, {
-		__index = function( self, k )
-			if not opc[k] then
-				opc[k] = memoize( function( x ) local f = op[k]; return function( y ) return f(y,x) end end, 'kv' )
-			end
-			return opc[k]
-		end,
-	})
 }
 
-local function cand( x, y ) return function( ... ) return x(...) and y(...) end end
 
-local function cor( x, y )	return function( ... ) return x(...) or y(...) end end
-
-local function cnot( x ) return function( ... ) return not x( ... ) end end
-
+-- Currying
+local cr = setmetatable( {}, {
+	__index = function( self, k )
+		local f = op[k] or functions[k]
+		if not f then error( ('Operator or function not defined %q'):format( k )) end
+		if not opcache[k] then
+			opcache[k] = memoize( function( y ) local f = op[k] or functions[k]; return function( x ) return f(x,y) end end, 'kv' )
+		end
+		return opcache[k]
+	end,
+})
 
 local function curry( f, ... )
 	local n = select( '#', ... )
@@ -169,22 +173,69 @@ local function curry( f, ... )
 	end
 end
 
+-- Composition
 local function compose( fs )
 	local n = #fs
 	if n <= 1 then return fs[1]
 	elseif n == 2 then local f1,f2 = fs[1],fs[2]; return function(...) return f2(f1(...))end
 	elseif n == 3 then local f1,f2,f3 = fs[1],fs[2],fs[3]; return function(...) return f3(f2(f1(...)))end
 	elseif n == 4 then local f1,f2,f3,f4 = fs[1],fs[2],fs[3],fs[4]; return function(...) return f4(f3(f2(f1(...))))end
-	else
-		local f1,f2,f3,f4,f5 = fs[1],fs[2],fs[3],fs[4],fs[5]
+	else local f1,f2,f3,f4,f5 = fs[1],fs[2],fs[3],fs[4],fs[5]
 		if n <= 5 then return function(...) return f5(f4(f3(f2(f1(...))))) end
-		else return function(...) 
-			local y = f5(f4(f3(f2(f1(...)))))
-			for i = 6, n-5 do y = fs[i](y) end
+		else 
+			return function(...) 
+			local y = {f5(f4(f3(f2(f1(...)))))}
+			for i = 1, n-5 do y = {fs[i](tunpack(y))} end
 			return y
 		end end
 	end
 end
+
+local function cand( ... ) 
+	local n = select( '#', ... )
+	if n == 1 then local f1 = ...; return function(x) return f1(x) end 
+	elseif n == 2 then local f1,f2 = ...; return function(x) return f1(x) and f2(x) end
+	elseif n == 3 then local f1,f2,f3 = ...; return function(x) return f1(x) and f2(x) and f3(x) end 
+	elseif n == 4 then local f1,f2,f3,f4 = ...; return function(x) return f1(x) and f2(x) and f3(x) and f4(x) end
+	else local f1,f2,f3,f4,f5 = ...
+		if n <= 5 then return function(x) return f1(x) and f2(x) and f3(x) and f4(x) and f5(x) end
+		else 
+			local fs = {select(6,...)}
+			return function(x)
+			local y = f1(x) and f2(x) and f3(x) and f4(x) and f5(x)
+			for i = 1,n-5 do 
+				if not y then return y
+				else y = y and fs[i](x)
+				end
+			end
+			return y end 
+		end
+	end
+end
+
+local function cor( ... ) 
+	local n = select( '#', ... )
+	if n == 1 then local f1 = ...; return function(x) return f1(x) end 
+	elseif n == 2 then local f1,f2 = ...; return function(x) return f1(x) or f2(x) end
+	elseif n == 3 then local f1,f2,f3 = ...; return function(x) return f1(x) or f2(x) or f3(x) end 
+	elseif n == 4 then local f1,f2,f3,f4 = ...; return function(x) return f1(x) or f2(x) or f3(x) or f4(x) end
+	else local f1,f2,f3,f4,f5 = ...
+		if n <= 5 then return function(x) return f1(x) or f2(x) or f3(x) or f4(x) or f5(x) end
+		else 
+			local fs = {select(6,...)}
+			return function(x)
+			local y = f1(x) or f2(x) or f3(x) or f4(x) or f5(x)
+			for i = 1,n-5 do 
+				if y then return y
+				else y = y or fs[i](x)
+				end
+			end
+			return y end 
+		end
+	end
+end
+
+local function cnot( x ) return function( ... ) return not x( ... ) end end
 
 local function pipe( x, ... )
 	local y = x
@@ -199,77 +250,121 @@ local function pipe( x, ... )
 	return y
 end
 
+
+-- Map
 local function map( t, f )   local t_ = {}; for i = 1, #t do t_[i] = f( t[i] ) end return t_ end
-local function imap( t, f )  local t_ = {}; for i = 1, #t do t_[i] = f( t[i], i ) end return t_ end
+local function imap( t, f )  local t_ = {}; for i = 1, #t do t_[i] = f( i, t[i] ) end return t_ end
 local function vmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v ) end return t_ end
 local function kmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k ) end return t_ end
 local function kvmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k, v ) end return t_ end
 local function vkmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v, k ) end return t_ end
 
+
+-- Inplace map
 local function mapI( t, f )   for i = 1, #t do t[i] = f( t[i] ) end return t end
-local function imapI( t, f )  for i = 1, #t do t[i] = f( t[i], i ) end return t end
+local function imapI( t, f )  for i = 1, #t do t[i] = f( i, t[i] ) end return t end
 local function vmapI( t, f )  for k,v in pairs( t ) do t[k] = f( v ) end return t end
 local function kmapI( t, f )  for k,v in pairs( t ) do t[k] = f( k ) end return t end
 local function kvmapI( t, f ) for k,v in pairs( t ) do t[k] = f( k, v ) end return t end
 local function vkmapI( t, f ) for k,v in pairs( t ) do t[k] = f( v, k ) end return t end
 
-local function each( t, f )   for i = 1, #t do f( t[i] ) end end
-local function ieach( t, f )  for i = 1, #t do f( t[i], i ) end end
-local function veach( t, f )  for k,v in pairs( t ) do f( v ) end end
-local function keach( t, f )  for k,v in pairs( t ) do f( k ) end end
-local function kveach( t, f ) for k,v in pairs( t ) do f( k, v ) end end
-local function vkeach( t, f ) for k,v in pairs( t ) do f( v, k ) end end
 
+-- Filter
 local function filter( t, f )   local t_,j = {},0; for i = 1, #t do if f( t[i] ) then j = j + 1; t_[j] = t[i] end end return t_ end
-local function ifilter( t, f )  local t_,j = {},0; for i = 1, #t do if f( t[i], i ) then j = j + 1; t_[j] = t[i] end end return t_ end
+local function ifilter( t, f )  local t_,j = {},0; for i = 1, #t do if f( i, t[i] ) then j = j + 1; t_[j] = t[i] end end return t_ end
 local function vfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( v ) then t_[k] = v end end return t_ end
 local function kfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( k ) then t_[k] = v end end return t_ end
 local function kvfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( k, v ) then t_[k] = v end end return t_ end
 local function vkfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( v, k ) then t_[k] = v end end return t_ end
 
+
+-- Inplace filter
 local function filterI( t, f )   local j = 0; for i = 1, #t do if f( t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
-local function ifilterI( t, f )  local j = 0; for i = 1, #t do if f( t[i],i ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function ifilterI( t, f )  local j = 0; for i = 1, #t do if f( i, t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
 local function vfilterI( t, f )  for k,v in pairs( t ) do if not f( v ) then t[k] = nil end end return t end
 local function kfilterI( t, f )  for k,v in pairs( t ) do if not f( k ) then t[k] = nil end end return t end
 local function kvfilterI( t, f ) for k,v in pairs( t ) do if not f( k, v ) then t[k] = nil end end return t end
 local function vkfilterI( t, f ) for k,v in pairs( t ) do if not f( v, k ) then t[k] = nil end end return t end
 
-local function foldl( t, f, acc )  local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( t[i], acc ) end return acc end
-local function ifoldl( t, f, acc ) local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( t[i], i, acc ) end return acc end
-local function foldr( t, f, acc )  local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( t[i], acc ) end return acc end
-local function ifoldr( t, f, acc ) local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( t[i], i, acc ) end return acc end
-local function vfold( t, f, acc )  local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( v, acc ) end return acc end
-local function kfold( t, f, acc )  local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( k, acc ) end return acc end
-local function vkfold( t, f, acc ) local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( v, k, acc ) end return acc end
-local function kvfold( t, f, acc ) local j,acc; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( k, v, acc ) end return acc end
 
+-- Fold
+local function foldl( t, f, acc )  local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( acc, t[i] ) end return acc end
+local function ifoldl( t, f, acc ) local j,acc = acc==nil and 2 or 1, acc==nil and t[1] or acc;  for i = j,#t do acc = f( acc, i, t[i] ) end return acc end
+local function foldr( t, f, acc )  local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( acc, t[i] ) end return acc end
+local function ifoldr( t, f, acc ) local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( acc, i, t[i] ) end return acc end
+local function vfold( t, f, acc )  local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, v ) end return acc end
+local function kfold( t, f, acc )  local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, k ) end return acc end
+local function vkfold( t, f, acc ) local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, v, k ) end return acc end
+local function kvfold( t, f, acc ) local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, k, v ) end return acc end
 local function sum( t, acc ) local acc = acc or 0;  for i = 1, #t do acc = acc + t[i] end;  return acc end
 local function product( t, acc ) local acc = acc or 1;  for i = 1, #t do acc = acc * t[i] end;  return acc end
 
-local function range( init, limit, step )
-	local init, limit, step = init, limit, step or 1
-	if not limit then
-		init, limit = 1, init
+
+-- For each
+local function each( t, f )   for i = 1, #t do f( t[i] ) end end
+local function ieach( t, f )  for i = 1, #t do f( i, t[i] ) end end
+local function veach( t, f )  for k,v in pairs( t ) do f( v ) end end
+local function keach( t, f )  for k,v in pairs( t ) do f( k ) end end
+local function kveach( t, f ) for k,v in pairs( t ) do f( k, v ) end end
+local function vkeach( t, f ) for k,v in pairs( t ) do f( v, k ) end end
+
+
+-- Traversing table
+local function traverse( t, f, level, key, saved )
+	local level = level or 1
+	local saved = saved or {}
+	if type( t ) == 'table' and not saved[t] then
+		saved[t] = t
+		for k, v in pairs( t ) do
+			local x = traverse( v, f, level + 1, k, saved ) 
+			if x then
+				return x
+			end
+		end
+	else
+		return f( t, key, level ) 
 	end
-	local t, k = {}, 0
-	for i = init, limit, step do
-		k = k + 1
-		t[k] = i
-	end
+end
+
+
+-- Transformations
+local function append( t1, t2, inplace )
+	local t, n = {}, #t1
+	for i = 1, n do t[i] = t1[i] end
+	for i = 1, #t2 do t[i+n] = t2[i] end
 	return t
 end
 
-local RangeMT = {
-	__index = function( self, k ) return self.i + self.s*(k-1) end,
-	__len   = function( self ) return self.l end,
-}
+local function prepend( t1, t2, inplace ) 
+	local t, m = {}, #t2
+	for i = 1, m do t[i] = t2[i] end
+	for i = 1, #t1 do t[m+i] = t1[i] end
+	return t
+end
 
-local function xrange( init, limit, step )
-	local init, limit, step = init, limit, step or 1
-	if not limit then
-		init, limit = 1, init
+local function inject( t1, t2, pos )
+	local pos = pos < 0 and #t1 + pos + 1 or pos
+	if pos <= 1 then return prepend( t1, t2 )
+	elseif pos >= #t1 then return append( t1, t2 )
+	else 
+		local n, m, t = #t1, #t2, {}
+		for i = 1, pos-1 do t[i] = t1[i] end
+		for i = 1, m do t[i+pos-1] = t2[i] end
+		for i = pos, n do t[i+m] = t1[i] end
+		return t
 	end
-	return setmetatable( {i = init,l = 1+math.floor((limit-init)/step),s = step}, RangeMT )
+end
+
+local function reverse( t ) local t_, n = {}, #t;  for i = 1, n do t_[i] = t[n-i+1] end;  return t_ end
+
+local function shuffle( t, f )
+	local f, n = f or math.random, #t
+	local t_ = {}
+	for i = n, 1, -1 do
+		local idx = f( i )
+		t_[j], t_[i] = t_[i], t_[j]
+	end
+	return t_
 end
 
 local function slice( t, init, limit, step )
@@ -286,45 +381,57 @@ local function slice( t, init, limit, step )
 	return t_
 end
 
-local function append( t1, t2, inplace )
-	local t, n = {}, #t1
-	for i = 1, n do t[i] = t1[i] end
-	for i = 1, #t2 do t[i+n] = t2[i] end
-	return t
+local function unique( t )
+	local enc, out, k = {}, {}, 0
+	for i = 1, #t do
+		local e = t[i]
+		if not enc[e] then
+			enc[e] = true
+			k = k + 1
+			out[k] = e
+		end
+	end
+	return out
 end
 
+local null = {}
+
+local function update( t, args ) 
+	local t_ = {}
+	for k, v in pairs( t ) do t_[k] = t[k] end
+	for k, v in pairs( args ) do t_[k] = v ~= null and v or nil end
+	return t_ 
+end
+
+local function flatten( t )
+	local function recflatten( t, v, i )
+		if type( v ) == 'table' then
+			for j = 1, #v do i = recflatten( t, v[j], i ) end
+		else
+			i = i + 1
+			t[i] = v
+		end
+		return i
+	end
+	local t_, j = {}, 0
+	for i = 1, #t do j = recflatten( t_, t[i], j ) end
+	return t_
+end
+
+
+-- Inplace transformations
 local function appendI( t1, t2 ) 
 	local n = #t1
 	for i = 1, #t2 do t1[i+n] = t2[i] end
 	return t1 
 end
 
-local function prepend( t1, t2, inplace ) 
-	local t, m = {}, #t2
-	for i = 1, m do t[i] = t2[i] end
-	for i = 1, #t1 do t[m+i] = t1[i] end
-	return t
-end
-
 local function prependI( t1, t2 ) 
 	local n, m = #t1,#t2
 	for i = n+1, n+m do t1[i] = false end
-	for i = n+m, n, -1 do t1[i] = t1[i-m] end
+	for i = n+m, m+1, -1 do t1[i] = t1[i-m] end
 	for i = 1, m do t1[i] = t2[i] end
 	return t1
-end
-
-local function inject( t1, t2, pos )
-	local pos = pos < 0 and #t1 + pos + 1 or pos
-	if pos <= 1 then return prepend( t1, t2 )
-	elseif pos >= #t1 then return append( t1, t2 )
-	else 
-		local n, m, t = #t1, #t2, {}
-		for i = 1, pos-1 do t[i] = t1[i] end
-		for i = 1, m do t[i+pos-1] = t2[i] end
-		for i = pos, n do t[i+m] = t1[i] end
-		return t
-	end
 end
 
 local function injectI( t1, t2, pos )
@@ -340,33 +447,9 @@ local function injectI( t1, t2, pos )
 	end
 end
 
-local function reverse( t )
-	local t_, n = {}, #t
-	for i = 1, n do t_[i] = t[n-i+1] end
-	return t_
-end
+local function reverseI( t ) local n = #t; for i = 1,  math.floor( n/2 ) do t[i], t[n-i+1] = t[n-i+1], t[i] end;  return t end
 
-local function reverseI( t )
-	local n = #t
-	for i = 1, math.floor( n/2 ) do t[i], t[n-i+1] = t[n-i+1], t[i] end
-	return t
-end
-
-local function update( t, args ) local t_ = {};  for k, v in pairs( t ) do t_[k] = args[k] or v end;  return t_ end
-local function updateI( t, args ) for k, v in pairs( args ) do t[k] = v end;  return t end
-
-local function sort( t, f ) local t_ = copy(t);  table.sort( t_, f );  return t_ end
-local function sortI( t, f ) table.sort( t, f );  return t end
-
-local function shuffle( t, f )
-	local f, n = f or math.random, #t
-	local t_ = {}
-	for i = n, 1, -1 do
-		local idx = f( i )
-		t_[j], t_[i] = t_[i], t_[j]
-	end
-	return t_
-end
+local function updateI( t, args ) for k, v in pairs( args ) do t[k] = v ~= null and v or nil end;  return t end
 
 local function shuffleI( t, f )
 	local f, n = f or math.random, #t
@@ -377,13 +460,15 @@ local function shuffleI( t, f )
 	return t
 end
 
-local function indexof( t, v, fcmp )
-	if not fcmp then
+
+-- Searching and sorting
+local function indexof( t, v, cmp )
+	if not cmp then
 		for i = 1, #t do if t[i] == v then return i end end
 	else
 		local function defaultcmp( a, b ) return a < b end
 		local init, limit = 1, #t, 0
-		local f = type(fcmp) == 'function' and fcmp or defaultcmp
+		local f = type(cmp) == 'function' and cmp or defaultcmp
 		local floor = math.floor
 		while init <= limit do
 			local mid = floor( 0.5*(init+limit))
@@ -396,8 +481,9 @@ local function indexof( t, v, fcmp )
 	end
 end
 
-local function indexofq( t, v, cmp, eq )
-	if not fcmp then
+local function indexofq( t, v, eq, cmp )
+	local eq = eq or equal
+	if not cmp then
 		for i = 1, #t do if eq( t[i], v ) then return i end end
 	else
 		local function defaultcmp( a, b ) return a < b end
@@ -416,27 +502,167 @@ local function indexofq( t, v, cmp, eq )
 end
 
 local function keyof( t, v ) for k, v_ in pairs( t ) do if v_ == v then return k end end end
-local function keyofq( t, v, eq ) for k, v_ in pairs( t ) do if eq( v_, v ) then return k end end end
+local function keyofq( t, v, eq ) local eq = eq or equal;  for k, v_ in pairs( t ) do if eq( v_, v ) then return k end end end
 
-local function topairs( t ) local t_,j = {}, 0;  for k, v in pairs( t ) do j = j + 1; t_[j] = {k,v} end;  return t_ end
+local function sort( t, f ) local t_ = copy(t);  table.sort( t_, f );  return t_ end
+local function sortI( t, f ) table.sort( t, f );  return t end
+
+
+-- Partition
+local function partition( t, f ) local t1, t2, j, k = {}, {}, 0, 0;  for i = 1, #t do  if f( t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
+local function ipartition( t, f ) local t1, t2, j, k = {}, {}, 0, 0;  for i = 1, #t do  if f( i, t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
+local function vpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function kpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function vkpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( v, k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function kvpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( k, v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+
+
+-- Zip/unzip
+local function zip( ... )
+	local ts = { ... }
+	local t = {}
+	if ts[1] then
+		local ncols, nrows = #ts, #ts[1]
+		for i = 2, ncols do
+			if #ts[i] < nrows then nrows = #ts[i] end
+		end
+		for i = 1, nrows do
+			local t_ = {}
+			for j = 1, ncols do t_[j] = ts[j][i] end
+			t[i] = t_
+		end
+	end
+	return t
+end
+	
+local function unzip( t )
+	local t_ = {}
+	if #t > 0 and type( t[1] ) == 'table' then
+		local n = #t[1]
+		for i = 1, n do t_[i] = {} end
+		for i = 1, n do
+			for j = 1, #t do t_[i][j] = t[j][i] end
+		end
+	end
+	return tunpack( t_ )
+end
+
+
+-- Table creation and manipulation
+local function newtable( size, init )
+	local init = init or false
+	if not size or size <= 0 then return {}
+	elseif size == 1 then return {init}
+	elseif size == 2 then return {init,init}
+	elseif size == 3 then return {init,init,init}
+	elseif size == 4 then return {init,init,init,init}
+	elseif size == 5 then return {init,init,init,init,init}
+	elseif size == 6 then return {init,init,init,init,init,init}
+	elseif size == 7 then return {init,init,init,init,init,init,init}
+	elseif size >= 8 then 
+		local t = {init,init,init,init,init,init,init,init}
+		for i = 9,size do t[i] = init end
+		return t
+	end
+end
+
+local function keys( t ) local t_,j = {},0;  for k, v in pairs( t ) do j = j + 1; t_[j] = k end;  return t_ end
+
+local function values( t ) local t_,j = {},0;  for k, v in pairs( t ) do j = j + 1; t_[j] = v end;  return t_ end
+
+local function topairs( t ) local t_,j = {},0;  for k, v in pairs( t ) do j = j + 1; t_[j] = {k,v} end;  return t_ end
+
 local function frompairs( t ) local t_ = {};  for i = 1, #t do t_[t[i][1]] = t[i][2] end;  return t_ end
 
-local function flatten( t )
-	local function recflatten( t, v, i )
-		if type( v ) == 'table' then
-			for j = 1, #v do i = recflatten( t, v[j], i ) end
-		else
-			i = i + 1
-			t[i] = v
-		end
-		return i
+local function tolists( t )
+	local t1, t2, i = {}, {}, 0
+	for k, v in pairs( t ) do
+		i = i + 1
+		t1[i], t2[i] = k, v
 	end
-	local t_, j = {}, 0
-	for i = 1, #t do j = recflatten( t_, t[i], j ) end
+	return t1, t2
+end
+
+local function fromlists( t1, t2 )
+	local t = {}
+	for i = 1, math.min( #t1, #t2 ) do t[t1[i]] = t2[i] end
+	return t
+end
+
+local function pack( ... ) return { ... } end
+
+
+
+
+-- Counting
+local function nkeys( t )
+	local len = 0
+	for k, v in pairs( t ) do len = len + 1 end
+	return len
+end
+
+local function count( t )
+	local t_ = {}
+	for i = 1, #t do
+		local v = t[i]
+		t_[v] = (t_[v] or 0) + 1
+	end
 	return t_
 end
 
-local function set( ... )
+
+-- Copying
+local function copy( t, arrayfor )
+	if type( t ) == 'table' then
+		local t_ = {}
+		if arrayfor then
+			for i = 1, #t do t_[i] = t[i] end
+		else
+			for k, v in pairs( t ) do t_[k] = v end
+		end
+		return t_
+	else
+		return t
+	end
+end
+
+local function deepcopy( t, saved )
+	local saved = saved or {}
+	if type( t ) == 'table' then
+		if not saved[t] then
+			local t_ = {}
+			saved[t] = setmetatable( t_, getmetatable( t ))
+			for k, v in pairs( t ) do
+				t_[deepcopy( k, saved )] = deepcopy( v, saved )
+			end
+			return t_
+		else
+			return saved[t]
+		end
+	else
+		return t
+	end
+end
+
+
+-- Range
+local RangeMT = {
+	__index = function( self, k ) return self.i + self.s*(k-1) end,
+	__len   = function( self ) return self.l end,
+}
+
+local function range( init, limit, step )
+	local init, limit, step = init, limit, step or 1
+	if not limit then
+
+		init, limit = 1, init
+	end
+	return setmetatable( {i = init,l = 1+math.floor((limit-init)/step),s = step}, RangeMT )
+end
+
+
+-- Set operations
+local function setof( ... )
 	local t = {}
 	for i = 1, select( '#', ... ) do
 		local k = select( i, ... )
@@ -468,157 +694,8 @@ local function difference( t1, t2 )
 	return t
 end
 
-local function diffclock( f, ... )
-	local t = os.clock()
-	f( ... )
-	return os.clock() - t
-end
 
-local function ndiffclock( n, f, ... )
-	local t = os.clock()
-	for i = 1, n do f( ... ) end
-	return (os.clock() - t) / n 
-end
-
-local function diffmemory( f, ... )
-	collectgarbage()
-	local m = collectgarbage('count')
-	f( ... )
-	return 1024*(collectgarbage('count') - m)
-end
-
-
-local function serialize( v, tables, ident, identSymbol )
-	local t_ = type( v )
-	if t_ ~= 'table' then
-		if t_ == 'string' then
-			return ('%q'):format( v )
-		else
-			return tostring( v )
-		end
-	else
-		if not tables[v] then
-			tables.n = (tables.n or 0) + 1
-			tables[v] = tables.n
-			local buff = {}
-			local arr = {}
-			for i = 1, #v do
-				arr[i] = true
-				buff[i] = serialize( v[i], tables )
-			end
-			for k, vv in pairs( v ) do
-				if not arr[k] then
-					if isid( k ) then
-						buff[#buff+1] = ('%s%s = %s'):format( ident and ('\n' .. (identSymbol or (' ')):rep(ident)) or '', k, serialize( vv, tables, ident and (ident + 1), identSymbol ))
-					else
-						buff[#buff+1] = ('%s[%s] = %s'):format( (ident and (identSymbol or (' ')):rep(ident)) or '', serialize( k, tables, ident, identSymbol ), serialize( vv, tables, ident, identSymbol ))
-					end
-				end
-			end
-			return '{' .. table.concat( buff, ', ' ) .. '}' 
-		else
-			return '__' .. tables[v]
-		end
-	end
-end
-
-local function xtostring( v, ident )
-	return serialize( v, {}, ident or 1, '  ' )
-end
-
-local function pp( ... )
-	local n = select( '#', ... )
-	local x, pred
-	for i = 1, n do
-		pred = x
-		x = select( i, ... )
-		if type( x ) == 'table' and i > 1 then
-			io.write( '\n' )
-		end	
-		io.write( xtostring( x ) )
-		if i < n then
-			io.write( type(x) == 'table' and '\n' or '\t' )
-		end
-	end
-	io.write('\n')
-end
-
-local function copy( t, arrayfor )
-	if type( t ) == 'table' then
-		local t_ = {}
-		if arrayfor then
-			for i = 1, #t do t_[i] = t[i] end
-		else
-			for k, v in pairs( t ) do t_[k] = v end
-		end
-		return t_
-	else
-		return t
-	end
-end
-
-local function deepcopy( t, saved )
-	local saved = saved or {}
-	if type( t ) == 'table' then
-		if not saved[t] then
-			local t_ = {}
-			for k, v in pairs( t ) do
-				t_[deepcopy( k, saved )] = deepcopy( v, saved )
-			end
-			saved[t] = setmetatable( t_, getmetatable( t ))
-			return t_
-		else
-			return saved[t]
-		end
-	else
-		return t
-	end
-end
-
-local function kvzip( t1, t2 )
-	local t = {}
-	for i = 1, math.min( #t1, #t2 ) do t[t1[i]] = t2[i] end
-	return t
-end
-
-local function kvunzip( t )
-	local t1, t2, i = {}, {}, 0
-	for k, v in pairs( t ) do
-		i = i + 1
-		t1[i], t2[i] = k, v
-	end
-	return t1, t2
-end
-
-local function zip( ... )
-	local ts = { ... }
-	local t = {}
-	if ts[1] then
-		local ncols, nrows = #ts, #ts[1]
-		for i = 2, ncols do
-			if #ts[i] < nrows then nrows = #ts[i] end
-		end
-		for i = 1, nrows do
-			local t_ = {}
-			for j = 1, ncols do t_[j] = ts[j][i] end
-			t[i] = t_
-		end
-	end
-	return t
-end
-	
-local function unzip( t )
-	local t_ = {}
-	if #t > 0 and type( t[1] ) == 'table' then
-		local n = #t[1]
-		for i = 1, n do t_[i] = {} end
-		for i = 1, n do
-			for j = 1, #t do t_[i][j] = t[j][i] end
-		end
-	end
-	return tunpack( t_ )
-end
-
+-- Combinatorics
 local function permutations( input )
 	local out, used, n, level, acc = {}, {}, #input, 1, {}
 	local function recpermute( level )
@@ -642,7 +719,26 @@ local function permutations( input )
 	return recpermute( 1 )
 end
 
-local function combinations( ts )
+local function combinations( ts, n )
+	local m, t, acc = #ts, {}, {}
+
+	local function reccombine( i )
+		if #t >= n then
+			acc[#acc+1] = copy( t )
+		else
+			for j = i, m do
+				t[#t+1] = ts[j]
+				reccombine( j + 1 )
+				t[#t] = nil
+			end
+		end
+	end
+	reccombine( 1 )
+	return acc
+end
+
+local function combinationsof( ... )
+	local ts = {...}
 	local n, t, acc = #ts, {}, {}
 
 	local function reccombine( i )
@@ -661,68 +757,96 @@ local function combinations( ts )
 	return acc
 end
 
-local function ncombinations( ts, n )
-	local m, t, acc = #ts, {}, {}
 
-	local function reccombine( i )
-		if #t >= n then
-			acc[#acc+1] = copy( t )
+-- Profiling utilities
+local function diffclock( f, ... )
+	local t = os.clock()
+	f( ... )
+	return os.clock() - t
+end
+
+local function ndiffclock( n, f, ... )
+	local t = os.clock()
+	for i = 1, n do f( ... ) end
+	return (os.clock() - t) / n 
+end
+
+local function diffmemory( f, ... )
+	collectgarbage()
+	local m = collectgarbage('count')
+	f( ... )
+	return 1024*(collectgarbage('count') - m)
+end
+
+
+-- Swap
+local function swap( x, y ) return y, x end
+
+
+-- Advanced tostring and pretty-printing
+local function xtostring( x, tables, identSymbol )
+	local tables = tables or {}
+	local identSymbol = identSymbol or ' '
+	local function serialize( v, ident )
+		local t_ = type( v )
+		if t_ ~= 'table' then
+			if t_ == 'string' then
+				return ('%q'):format( v )
+			else
+				return tostring( v )
+			end
 		else
-			for j = i, m do
-				t[#t+1] = ts[j]
-				reccombine( j + 1 )
-				t[#t] = nil
+			if not tables[v] then
+				tables.n = (tables.n or 0) + 1
+				tables[v] = tables.n
+				tables[tables.n] = v
+				local buff = {}
+				local arr = {}
+				for i = 1, #v do
+					arr[i] = true
+					buff[i] = serialize( v[i], ident )
+				end
+				for k, vv in pairs( v ) do
+					if not arr[k] then
+						if type( k ) == 'string' and k:match('[%a_][%w_]*') == k then
+							buff[#buff+1] = ('%s%s = %s'):format( ident and ('\n' .. identSymbol:rep(ident)) or '', k, serialize( vv, ident and (ident + 1)))
+						else
+							buff[#buff+1] = ('%s[%s] = %s'):format( ident and identSymbol:rep(ident) or '', serialize( k, ident ), serialize( vv, ident ))
+						end
+					end
+				end
+				return '{' .. table.concat( buff, ', ' ) .. '}' 
+			else
+				return '__' .. tables[v]
 			end
 		end
 	end
-	reccombine( 1 )
-	return acc
+	return serialize( x )
 end
 
-local function unique( t )
-	local enc, out, k = {}, {}, 0
-	for i = 1, #t do
-		local e = t[i]
-		if not enc[e] then
-			enc[e] = true
-			k = k + 1
-			out[k] = e
+local function pp( ... )
+	local n = select( '#', ... )
+	local x, pred
+	for i = 1, n do
+		pred = x
+		x = select( i, ... )
+		if type( x ) == 'table' and i > 1 then
+			io.write( '\n' )
+		end	
+		io.write( xtostring( x ) )
+		if i < n then
+			io.write( type(x) == 'table' and '\n' or '\t' )
 		end
 	end
-	return out
+	io.write('\n')
 end
 
-local function count( t )
-	local t_ = {}
-	for i = 1, #t do
-		local v = t[i]
-		t_[v] = (t_[v] or 0) + 1
-	end
-	return t_
-end
 
-local function traverse( t, f, level, key, saved )
-	local level = level or 1
-	local saved = saved or {}
-	if type( t ) == 'table' and not saved[t] then
-		saved[t] = t
-		for k, v in pairs( t ) do
-			local x = traverse( v, f, level + 1, k, saved ) 
-			if x then
-				return x
-			end
-		end
-	else
-		return f( t, key, level ) 
-	end
-end
-
-local functions
-
+-- Exporting library
 local function export( ... )
 	local n = select( '#', ... )
 	if n == 0 then
-		for k, v in pairs( functions ) do	_G[k] = v end
+		setmetatable( _G, {__index = functions} )
 	else
 		local f = {}
 		for i = 1, n do
@@ -733,86 +857,25 @@ local function export( ... )
 end
 
 functions = {
-	any = any,
-	op = op,
-	capture = capture,
-
-	equal = equal,
-	match = match,
-
-	pipe = pipe, curry = curry, compose = compose,
-	cand = cand, cor = cor, cnot = cnot,
-	swap = swap,
-
+	null = null, memoize = memoize, op = op, cr = cr,is = is, isnot = isnot, predicates = predicates,
+	all = all, any = any, wild = wild, capture = capture, equal = equal, match = match,
+	pipe = pipe, curry = curry, compose = compose, cand = cand, cor = cor, cnot = cnot, swap = swap,
 	map = map, imap = imap, vmap = vmap, kmap = kmap, vkmap = vkmap, kvmap = kvmap,
 	filter = filter, ifilter = ifilter, vfilter = vfilter, kfilter = kfilter, vkfilter = vkfilter, kvfilter = kvfilter,
 	foldl = foldl, foldr = foldr, ifoldl = ifoldl, ifoldr = ifoldr, kfold = kfold, vfold = vfold, vkfold = vkfold, kvfold = kvfold,
 	each = each, ieach = ieach, veach = veach, keach = keach, vkeach = vkeach, kveach = kveach,
-	
 	mapI = mapI, imapI = imapI, vmapI = vmapI, kmapI = kmapI, vkmapI = vkmapI, kvmapI = kvmapI,
 	filterI = filterI, ifilterI = ifilterI, vfilterI = vfilterI, kfilterI = kfilterI, vkfilterI = vkfilterI, kvfilterI = kvfilterI,
-	
-	sum = sum,
-	product = product,
-	count = count,
-
-	traverse = traverse,
-	newtable = newtable,
-	range = range,
-	xrange = xrange,
-	slice = slice,
-	
-	append = append, appendI = appendI,
-	prepend = prepend, prependI = prependI,
-	inject = inject, injectI = injectI,
-	
-	reverse = reverse, reverseI = reverseI,
-	shuffle = shuffle, shuffleI = shuffleI,
-	update = update, updateI = updateI,
-
-	nkeys = nkeys,
-	indexof = indexof, indexofq = indexofq,
-	keyof = keyof, keyofq = keyofq,
-	sort = sort, sortI = sortI,
-	
-	keys = keys,
-	values = values,
-
-	set = set,
-	intersect = intersect,
-	difference = difference,
-	union = union,
-	
-	permutations = permutations,
-	combinations = combinations,
-	ncombinations = ncombinations,
-
-	unique = unique,
-
-	copy = copy,
-	deepcopy = deepcopy,
-	
-	topairs = topairs,
-	frompairs = frompairs,
-	flatten = flatten,
-	kvzip = kvzip,
-	kvunzip = kvunzip,
-	zip = zip,
-	unzip = unzip,
-
-	pack = function(...) return {...} end,
-
-	diffclock = diffclock,
-	ndiffclock = ndiffclock,
-	diffmemory = diffmemory,
-	
-	serialize = serialize,
-	xtostring = xtostring,
-	pp = pp,
-
-	export = export,
-
-	memoize = memoize,
+	sum = sum, product = product, count = count, nkeys = nkeys, traverse = traverse, newtable = newtable,
+	range = range, slice = slice, append = append, appendI = appendI, prepend = prepend, prependI = prependI, 
+	inject = inject, injectI = injectI, reverse = reverse, reverseI = reverseI, shuffle = shuffle, shuffleI = shuffleI,
+	update = update, updateI = updateI, indexof = indexof, indexofq = indexofq, keyof = keyof, keyofq = keyofq,
+	sort = sort, sortI = sortI, keys = keys, values = values, setof = setof, intersect = intersect, difference = difference, union = union,
+	permutations = permutations, combinations = combinations, combinationsof = combinationsof,
+	unique = unique, copy = copy, deepcopy = deepcopy, topairs = topairs, frompairs = frompairs, tolists = tolists, fromlists = fromlists,
+	flatten = flatten, zip = zip, unzip = unzip, partition = partition, ipartition = ipartition, vpartition = vpartition, 
+	kpartition = kpartition, vkpartition = vkpartition, kvpartition = kvpartition, pack = pack, diffclock = diffclock, 
+	ndiffclock = ndiffclock, diffmemory = diffmemory, xtostring = xtostring, pp = pp, export = export,
 }
 
 return functions
