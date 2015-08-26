@@ -289,10 +289,10 @@ v[v] = v
 copy(v)
 deepcopy( v )
 
-assert( equal( {1,2,3,4,5}, range(5), true ))
-assert( equal( {2,3,4,5}, range(2,5), true ))
-assert( equal( {1,3,5,7,9}, range(1,10,2), true ))
-assert( equal( {5,4,3,2,1}, range(5,1,-1), true ))
+assert( equal( {1,2,3,4,5}, map(range(5),op.self), true ))
+assert( equal( {2,3,4,5}, map(range(2,5),op.self), true ))
+assert( equal( {1,3,5,7,9}, map(range(1,10,2),op.self), true ))
+assert( equal( {5,4,3,2,1}, map(range(5,1,-1),op.self), true ))
 
 assert( equal( setof('red','blue','green'), {red=true,blue=true,green=true} ))
 assert( equal( intersect(setof('red','green','blue'),setof('red','yellow','blue')), setof('red','blue') ))
@@ -305,5 +305,21 @@ assert( equal( combinations({1,2,3,4},2), {{1,2},{1,3},{1,4},{2,3},{2,4},{3,4}})
 assert( equal( combinationsof({1,2,3},{'x','y'}), {{1,'x'},{1,'y'},{2,'x'},{2,'y'},{3,'x'},{3,'y'}} ))
 
 assert( equal( {swap(1,2)}, {2,1} ))
+
+local _ = capture'_'
+local ___ = capture'___'
+local R = capture'...'
+local X, Y = capture'X',capture'Y'
+assert( equal( match( {1,2,2,3}, {X,Y,_,_} ), {X = 1, Y = 2} ))
+assert( equal( match( {1,2,2,3}, {X,Y,_} ), false ))
+assert( equal( match( {1,2,3,4,5}, {X,___} ), {X = 1} ))
+assert( equal( match( {1,2,3,4,5}, {Y,X,R} ), {Y = 1, X = 2, _ = {3,4,5}} ))
+assert( equal( match( {1,2,{3,{4,{5}}}}, {X,_,{3,{_,{Y}}}} ), {X = 1, Y = 5} ))
+assert( equal( match( 1, 2, 3, 4, 1 ), {} ))
+assert( equal( match( 1, 2, 3, 4, {} ), false ))
+assert( equal( match( {1,2,3,3,4},
+	{1,_,X,X,X},
+	{1,_,X,X,___} ), {X=3} ))
+
 
 print( _count, "tests passed" )

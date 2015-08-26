@@ -23,25 +23,46 @@ end
 -- Matching
 local wild = {}
 
-local function capture( name, predicate, transform ) return setmetatable( {name, predicate, transform}, wild ) end
+setmetatable( wild, wild )
+
+local rest = {'...'}
+local wildrest = {'___'}
+
+local function capture( name, predicate, transform ) return name == '_' and wild or name == '...' and rest or name == '___' and wildrest or setmetatable( {name, predicate, transform}, wild ) end
 
 local function equal( x, y, partial, captures )
-	if x == y or x == wild or y == wild then
+	if x == y or x == wild or y == wild or y == wildrest then
 		return true
 	elseif getmetatable( y ) == wild then
 		if captures then
 			if (not y[2] or y[2](x)) then
-				captures[y[1]] = not y[3] and x or y[3](x)
+				local name = y[1]
+				local value = not y[3] and x or y[3](x)
+				if captures[name] then
+					return captures[name] == value
+				else
+					captures[name] = value
+				end
 			end
 		end
 		return true
-	elseif type(x) == 'table' and type(y) == 'table' then
+	elseif type(x) == 'table' and type(y) == 'table' and getmetatable(x) == getmetatable(y) then
 		local nx, ny = 0, 0
 		for k, v in pairs( x ) do nx = nx + 1 end
 		for k, v in pairs( y ) do ny = ny + 1 end
 		if nx == ny or (partial and nx >= ny) then
 			for k, v in pairs( x ) do
-				if y[k] == nil or not equal( v, y[k], partial, captures ) then
+				if y[k] == wildrest then
+					return true
+				elseif y[k] == rest then
+					if captures then
+						captures._ = captures._ or {}
+						for i = k,#x do
+							captures._[i-k+1] = x[i]
+						end
+					end
+					return true
+				elseif y[k] == nil or not equal( v, y[k], partial, captures ) then
 					return false
 				end
 			end
@@ -54,13 +75,15 @@ local function equal( x, y, partial, captures )
 	end
 end
 
-local function match( x, y, partial )
-	local captures = {}
-	if equal( x, y, partial, captures ) then
-		return captures
-	else
-		return false
+local function match( x, ... )
+	for i = 1, select( '#', ... ) do
+		local y = select( i, ... )
+		local captures = {}
+		if equal( x, y,  (type(y)=='table' and (y[#y] == rest or y[#y] == wildrest)), captures ) then
+			return captures
+		end
 	end
+	return false
 end
 
 
@@ -112,6 +135,7 @@ local function any( t, f ) for k, v in pairs( t ) do if f( v ) then return true 
 local opcache = {}
 
 local op = {
+	self = function( x ) return x end,
 	add = function( x, y ) return x + y end,
 	sub = function( x, y ) return x - y end,
 	div = function( x, y ) return x / y end,
