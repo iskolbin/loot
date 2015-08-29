@@ -3,7 +3,12 @@ local tunpack, pairs, next, type, select, getmetatable, setmetatable = table.unp
 local functions
 
 -- Memoization
+local allowmemoize = ALLOW_MEMOIZE == nil and true or ALLOW_MEMOIZE
+
 local function memoize( closure, mode )
+	if not allowmemoize then
+		return closure
+	end
 	local cache
 	cache = setmetatable( {}, {
 		__mode = mode, 
@@ -21,19 +26,18 @@ end
 
 
 -- Matching
-local wild = {}
+local CaptureMT = {}
 
-setmetatable( wild, wild )
-
+local wild = {'_'}
 local rest = {'...'}
 local wildrest = {'___'}
 
-local function capture( name, predicate, transform ) return name == '_' and wild or name == '...' and rest or name == '___' and wildrest or setmetatable( {name, predicate, transform}, wild ) end
+local function capture( name, predicate, transform ) return name == '_' and wild or name == '...' and rest or name == '___' and wildrest or setmetatable( {name, predicate, transform}, CaptureMT ) end
 
 local function equal( x, y, partial, captures )
 	if x == y or x == wild or y == wild or y == wildrest then
 		return true
-	elseif getmetatable( y ) == wild then
+	elseif getmetatable( y ) == CaptureMT then
 		if captures then
 			if (not y[2] or y[2](x)) then
 				local name = y[1]
@@ -168,7 +172,6 @@ local op = {
 	selfcall = function( x, y ) return x[y](x) end,
 	selffun = function( x, y ) return y[x](y) end,
 }
-
 
 -- Currying
 local cr = setmetatable( {}, {
@@ -807,6 +810,12 @@ end
 local function swap( x, y ) return y, x end
 
 
+-- Generate simple function from string
+local fn = memoize( function(code) 
+	return loadstring(('return function(x,y,z,u,v,w)\nreturn %s\nend'):format( code ))()
+end )
+
+
 -- Advanced tostring and pretty-printing
 local function xtostring( x, tables, identSymbol )
 	local tables = tables or {}
@@ -882,7 +891,7 @@ end
 
 functions = {
 	null = null, memoize = memoize, op = op, cr = cr,is = is, isnot = isnot, predicates = predicates,
-	all = all, any = any, wild = wild, capture = capture, equal = equal, match = match,
+	all = all, any = any, wild = wild, rest = rest, wildrest = wildrest, capture = capture, equal = equal, match = match,
 	pipe = pipe, curry = curry, compose = compose, cand = cand, cor = cor, cnot = cnot, swap = swap,
 	map = map, imap = imap, vmap = vmap, kmap = kmap, vkmap = vkmap, kvmap = kvmap,
 	filter = filter, ifilter = ifilter, vfilter = vfilter, kfilter = kfilter, vkfilter = vkfilter, kvfilter = kvfilter,
@@ -899,7 +908,7 @@ functions = {
 	unique = unique, copy = copy, deepcopy = deepcopy, topairs = topairs, frompairs = frompairs, tolists = tolists, fromlists = fromlists,
 	flatten = flatten, zip = zip, unzip = unzip, partition = partition, ipartition = ipartition, vpartition = vpartition, 
 	kpartition = kpartition, vkpartition = vkpartition, kvpartition = kvpartition, pack = pack, diffclock = diffclock, 
-	ndiffclock = ndiffclock, diffmemory = diffmemory, xtostring = xtostring, pp = pp, export = export,
+	ndiffclock = ndiffclock, diffmemory = diffmemory, xtostring = xtostring, pp = pp, export = export, fn = fn,
 }
 
 return functions

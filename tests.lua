@@ -320,6 +320,12 @@ assert( equal( match( 1, 2, 3, 4, {} ), false ))
 assert( equal( match( {1,2,3,3,4},
 	{1,_,X,X,X},
 	{1,_,X,X,___} ), {X=3} ))
-
+assert( equal( fn'x>2', fn'x>2' ))
+assert( equal( fn'math.sin(x)'(2), math.sin(2)))
+assert( equal( fn'x+y'(1,2), 3 ))
+assert( equal( fn'x*y*z'(2,5,10), 100 ))
+assert( equal( fn'x*y*z*u'(2,5,10,10), 1000 ))
+assert( equal( fn'x*y*z*u*v'(2,5,10,10,20), 20000 ))
+assert( equal( fn'x*y*z*u*v*w'(2,5,10,10,20,30), 600000 ))
 
 print( _count, "tests passed" )
