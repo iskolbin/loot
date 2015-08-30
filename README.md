@@ -214,6 +214,9 @@ Lua ootility toolbox
 ## Swap
 * swap( a, b )
 
+## Short function string shortcut (arguments are x,y,z,u,v,w)
+* fn( code )
+
 ## Advanced tostring and pretty-printing
 * xtostring( ... )
 * pp( ... )
