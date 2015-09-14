@@ -1,6 +1,7 @@
 local tunpack, pairs, next, type, select, getmetatable, setmetatable = table.unpack or unpack, pairs, next, type, select, getmetatable, setmetatable
 
 local functions
+local LootMT 
 
 -- Memoization
 local allowmemoize = ALLOW_MEMOIZE == nil and true or ALLOW_MEMOIZE
@@ -82,7 +83,7 @@ end
 local function match( x, ... )
 	for i = 1, select( '#', ... ) do
 		local y = select( i, ... )
-		local captures = {}
+		local captures = setmetatable( {}, LootMT )
 		if equal( x, y,  (type(y)=='table' and (y[#y] == rest or y[#y] == wildrest)), captures ) then
 			return captures
 		end
@@ -279,12 +280,12 @@ end
 
 
 -- Map
-local function map( t, f )   local t_ = {}; for i = 1, #t do t_[i] = f( t[i] ) end return t_ end
-local function imap( t, f )  local t_ = {}; for i = 1, #t do t_[i] = f( i, t[i] ) end return t_ end
-local function vmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v ) end return t_ end
-local function kmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k ) end return t_ end
-local function kvmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k, v ) end return t_ end
-local function vkmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v, k ) end return t_ end
+local function map( t, f )   local t_ = {}; for i = 1, #t do t_[i] = f( t[i] ) end return setmetatable( t_, getmetatable(t) ) end
+local function imap( t, f )  local t_ = {}; for i = 1, #t do t_[i] = f( i, t[i] ) end return setmetatable( t_, getmetatable(t) ) end
+local function vmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v ) end return setmetatable( t_, getmetatable(t) ) end
+local function kmap( t, f )  local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k ) end return setmetatable( t_, getmetatable(t) ) end
+local function kvmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( k, v ) end return setmetatable( t_, getmetatable(t) ) end
+local function vkmap( t, f ) local t_ = {}; for k,v in pairs( t ) do t_[k] = f( v, k ) end return setmetatable( t_, getmetatable(t) ) end
 
 
 -- Inplace map
@@ -297,21 +298,39 @@ local function vkmapI( t, f ) for k,v in pairs( t ) do t[k] = f( v, k ) end retu
 
 
 -- Filter
-local function filter( t, f )   local t_,j = {},0; for i = 1, #t do if f( t[i] ) then j = j + 1; t_[j] = t[i] end end return t_ end
-local function ifilter( t, f )  local t_,j = {},0; for i = 1, #t do if f( i, t[i] ) then j = j + 1; t_[j] = t[i] end end return t_ end
-local function vfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( v ) then t_[k] = v end end return t_ end
-local function kfilter( t, f )  local t_ = {}; for k,v in pairs( t ) do if f( k ) then t_[k] = v end end return t_ end
-local function kvfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( k, v ) then t_[k] = v end end return t_ end
-local function vkfilter( t, f ) local t_ = {}; for k,v in pairs( t ) do if f( v, k ) then t_[k] = v end end return t_ end
+local function filter( t, p )   local t_,j = {},0; for i = 1, #t do if p( t[i] ) then j = j + 1; t_[j] = t[i] end end return setmetatable( t_, getmetatable(t)) end
+local function ifilter( t, p )  local t_,j = {},0; for i = 1, #t do if p( i, t[i] ) then j = j + 1; t_[j] = t[i] end end return setmetatable( t_, getmetatable(t)) end
+local function vfilter( t, p )  local t_ = {}; for k,v in pairs( t ) do if p( v ) then t_[k] = v end end return setmetatable( t_, getmetatable(t)) end
+local function kfilter( t, p )  local t_ = {}; for k,v in pairs( t ) do if p( k ) then t_[k] = v end end return setmetatable( t_, getmetatable(t)) end
+local function kvfilter( t, p ) local t_ = {}; for k,v in pairs( t ) do if p( k, v ) then t_[k] = v end end return setmetatable( t_, getmetatable(t)) end
+local function vkfilter( t, p ) local t_ = {}; for k,v in pairs( t ) do if p( v, k ) then t_[k] = v end end return setmetatable( t_, getmetatable(t)) end
 
 
 -- Inplace filter
-local function filterI( t, f )   local j = 0; for i = 1, #t do if f( t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
-local function ifilterI( t, f )  local j = 0; for i = 1, #t do if f( i, t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
-local function vfilterI( t, f )  for k,v in pairs( t ) do if not f( v ) then t[k] = nil end end return t end
-local function kfilterI( t, f )  for k,v in pairs( t ) do if not f( k ) then t[k] = nil end end return t end
-local function kvfilterI( t, f ) for k,v in pairs( t ) do if not f( k, v ) then t[k] = nil end end return t end
-local function vkfilterI( t, f ) for k,v in pairs( t ) do if not f( v, k ) then t[k] = nil end end return t end
+local function filterI( t, p )   local j = 0; for i = 1, #t do if p( t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function ifilterI( t, p )  local j = 0; for i = 1, #t do if p( i, t[i] ) then j = j + 1; t[j] = t[i] end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function vfilterI( t, p )  for k,v in pairs( t ) do if not p( v ) then t[k] = nil end end return t end
+local function kfilterI( t, p )  for k,v in pairs( t ) do if not p( k ) then t[k] = nil end end return t end
+local function kvfilterI( t, p ) for k,v in pairs( t ) do if not p( k, v ) then t[k] = nil end end return t end
+local function vkfilterI( t, p ) for k,v in pairs( t ) do if not p( v, k ) then t[k] = nil end end return t end
+
+
+-- Map-filter
+local function mapfilter( t, f, p )   local t_,j = {},0; for i = 1, #t do local v_ = f( t[i] ); if p( v_ ) then j = j + 1; t_[j] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function imapfilter( t, f, p )  local t_,j = {},0; for i = 1, #t do local v_ = f( i, t[i] ); if p( i, v_ ) then j = j + 1; t_[j] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function vmapfilter( t, f, p )  local t_ = {}; for k,v in pairs( t ) do local v_ = f( v ); if p( v_ ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function kmapfilter( t, f, p )  local t_ = {}; for k,v in pairs( t ) do local v_ = f( k ); if p( k ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function vkmapfilter( t, f, p ) local t_ = {}; for k,v in pairs( t ) do local v_ = f( v, k ); if p( v_, k ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function kvmapfilter( t, f, p ) local t_ = {}; for k,v in pairs( t ) do local v_ = f( k, v ); if p( k, v_ ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
+
+
+-- Inplace map-filter
+local function mapfilterI( t, f, p )   local j = 0; for i = 1, #t do local v_ = f( t[i] ); if p( v_ ) then j = j + 1; t[j] = v_ end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function imapfilterI( t, f, p )  local j = 0; for i = 1, #t do local v_ = f( i, t[i] ); if p( i, v_ ) then j = j + 1; t[j] = v_ end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function vmapfilterI( t, f, p )  for k,v in pairs( t ) do local v_ = f( v ); if not p( v_ ) then t[k] = nil else t[k] = v_ end end return t end
+local function kmapfilterI( t, f, p )  for k,v in pairs( t ) do local v_ = f( k ); if not p( k ) then t[k] = nil else t[k] = v_ end end return t end
+local function vkmapfilterI( t, f, p ) for k,v in pairs( t ) do local v_ = f( v, k ); if not p( v_, k ) then t[k] = nil else t[k] = v_ end end return t end
+local function kvmapfilterI( t, f, p ) for k,v in pairs( t ) do local v_ = f( k, v ); if not p( k, v_ ) then t[k] = nil else t[k] = v_ end end return t end
 
 
 -- Fold
@@ -355,18 +374,18 @@ end
 
 
 -- Transformations
-local function append( t1, t2, inplace )
+local function append( t1, t2 )
 	local t, n = {}, #t1
 	for i = 1, n do t[i] = t1[i] end
 	for i = 1, #t2 do t[i+n] = t2[i] end
-	return t
+	return setmetatable( t, getmetatable( t1 ))
 end
 
-local function prepend( t1, t2, inplace ) 
+local function prepend( t1, t2 ) 
 	local t, m = {}, #t2
 	for i = 1, m do t[i] = t2[i] end
 	for i = 1, #t1 do t[m+i] = t1[i] end
-	return t
+	return setmetatable( t, getmetatable( t1 ))
 end
 
 local function inject( t1, t2, pos )
@@ -378,17 +397,17 @@ local function inject( t1, t2, pos )
 		for i = 1, pos-1 do t[i] = t1[i] end
 		for i = 1, m do t[i+pos-1] = t2[i] end
 		for i = pos, n do t[i+m] = t1[i] end
-		return t
+		return setmetatable( t, getmetatable( t1 ))
 	end
 end
 
-local function reverse( t ) local t_, n = {}, #t;  for i = 1, n do t_[i] = t[n-i+1] end;  return t_ end
+local function reverse( t ) local t_, n = {}, #t;  for i = 1, n do t_[i] = t[n-i+1] end;  return setmetatable( t_, getmetatable( t )) end
 
 local function shuffle( t, f )
 	local f, n = f or math.random, #t
-	local t_ = {}
+	local t_ = copy( t )
 	for i = n, 1, -1 do
-		local idx = f( i )
+		local j = f( i )
 		t_[j], t_[i] = t_[i], t_[j]
 	end
 	return t_
@@ -405,7 +424,7 @@ local function slice( t, init, limit, step )
 		j = j + 1
 		t_[j] = t[i]
 	end
-	return t_
+	return setmetatable( t_, getmetatable( t ))
 end
 
 local function unique( t )
@@ -418,7 +437,7 @@ local function unique( t )
 			out[k] = e
 		end
 	end
-	return out
+	return setmetatable( out, getmetatable( t ))
 end
 
 local null = {}
@@ -427,7 +446,7 @@ local function update( t, args )
 	local t_ = {}
 	for k, v in pairs( t ) do t_[k] = t[k] end
 	for k, v in pairs( args ) do t_[k] = v ~= null and v or nil end
-	return t_ 
+	return setmetatable( t_, getmetatable( t )) 
 end
 
 local function flatten( t )
@@ -442,7 +461,7 @@ local function flatten( t )
 	end
 	local t_, j = {}, 0
 	for i = 1, #t do j = recflatten( t_, t[i], j ) end
-	return t_
+	return setmetatable( t_, getmetatable( t ))
 end
 
 
@@ -536,12 +555,12 @@ local function sortI( t, f ) table.sort( t, f );  return t end
 
 
 -- Partition
-local function partition( t, f ) local t1, t2, j, k = {}, {}, 0, 0;  for i = 1, #t do  if f( t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
-local function ipartition( t, f ) local t1, t2, j, k = {}, {}, 0, 0;  for i = 1, #t do  if f( i, t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
-local function vpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
-local function kpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
-local function vkpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( v, k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
-local function kvpartition( t, f ) local t1, t2 = {}, {};  for k, v in pairs( t ) do if f( k, v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function partition( t, f ) local mt = getmetatable( t ); local t1, t2, j, k = setmetatable({},mt), setmetatable({},mt), 0, 0;  for i = 1, #t do  if f( t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
+local function ipartition( t, f ) local mt = getmetatable( t ); local t1, t2, j, k = setmetatable({},mt), setmetatable({},mt), 0, 0;  for i = 1, #t do  if f( i, t[i] ) then j = j + 1; t1[j] = t[i]  else k = k + 1;  t2[k] = t[i] end  end;  return t1,t2 end
+local function vpartition( t, f ) local mt = getmetatable( t ); local t1, t2 = setmetatable({},mt), setmetatable({},mt);  for k, v in pairs( t ) do if f( v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function kpartition( t, f ) local mt = getmetatable( t ); local t1, t2 = setmetatable({},mt), setmetatable({},mt);  for k, v in pairs( t ) do if f( k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function vkpartition( t, f ) local mt = getmetatable( t ); local t1, t2 = setmetatable({},mt), setmetatable({},mt);  for k, v in pairs( t ) do if f( v, k ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
+local function kvpartition( t, f ) local mt = getmetatable( t ); local t1, t2 = setmetatable({},mt), setmetatable({},mt);  for k, v in pairs( t ) do if f( k, v ) then t1[k] = v else t2[k] = v end end;  return t1,t2 end
 
 
 -- Zip/unzip
@@ -619,8 +638,6 @@ end
 local function pack( ... ) return { ... } end
 
 
-
-
 -- Counting
 local function nkeys( t )
 	local len = 0
@@ -647,7 +664,7 @@ local function copy( t, arrayfor )
 		else
 			for k, v in pairs( t ) do t_[k] = v end
 		end
-		return t_
+		return setmetatable( t_, getmetatable( t ))
 	else
 		return t
 	end
@@ -695,7 +712,7 @@ local function setof( ... )
 		local k = select( i, ... )
 		t[k] = true
 	end
-	return t
+	return setmetatable( t, LootMT )
 end
 
 local function intersect( t1, t2 )
@@ -703,14 +720,14 @@ local function intersect( t1, t2 )
 	for k, v in pairs( t1 ) do
 		if t2[k] ~= nil then t[k] = v end
 	end
-	return t
+	return setmetatable( t, getmetatable( t1 ))
 end
 
 local function union( t1, t2 )
 	local t = {}
 	for k, v in pairs( t1 ) do t[k] = v end
 	for k, v in pairs( t2 ) do t[k] = v end
-	return t
+	return setmetatable( t, getmetatable( t1 ))
 end
 
 local function difference( t1, t2 )
@@ -718,7 +735,7 @@ local function difference( t1, t2 )
 	for k, v in pairs( t1 ) do
 		if t2[k] == nil then t[k] = v end
 	end
-	return t
+	return setmetatable( t, getmetatable( t1 ))
 end
 
 
@@ -875,11 +892,15 @@ local function pp( ... )
 end
 
 
+local function mt( t )
+	return setmetatable( t, LootMT )
+end
+
 -- Exporting library
 local function export( ... )
 	local n = select( '#', ... )
 	if n == 0 then
-		setmetatable( _G, {__index = functions} )
+		setmetatable( _G, LootMT )
 	else
 		local f = {}
 		for i = 1, n do
@@ -895,6 +916,8 @@ functions = {
 	pipe = pipe, curry = curry, compose = compose, cand = cand, cor = cor, cnot = cnot, swap = swap,
 	map = map, imap = imap, vmap = vmap, kmap = kmap, vkmap = vkmap, kvmap = kvmap,
 	filter = filter, ifilter = ifilter, vfilter = vfilter, kfilter = kfilter, vkfilter = vkfilter, kvfilter = kvfilter,
+	mapfilter = mapfilter, imapfilter = imapfilter, vmapfilter = vmapfilter, kmapfilter = kmapfilter, vkmapfilter = vkmapfilter, kvmapfilter = kvmapfilter,
+	mapfilterI = mapfilterI, imapfilterI = imapfilterI, vmapfilterI = vmapfilterI, kmapfilterI = kmapfilterI, vkmapfilterI = vkmapfilterI, kvmapfilterI = kvmapfilterI,
 	foldl = foldl, foldr = foldr, ifoldl = ifoldl, ifoldr = ifoldr, kfold = kfold, vfold = vfold, vkfold = vkfold, kvfold = kvfold,
 	each = each, ieach = ieach, veach = veach, keach = keach, vkeach = vkeach, kveach = kveach,
 	mapI = mapI, imapI = imapI, vmapI = vmapI, kmapI = kmapI, vkmapI = vkmapI, kvmapI = kvmapI,
@@ -908,7 +931,11 @@ functions = {
 	unique = unique, copy = copy, deepcopy = deepcopy, topairs = topairs, frompairs = frompairs, tolists = tolists, fromlists = fromlists,
 	flatten = flatten, zip = zip, unzip = unzip, partition = partition, ipartition = ipartition, vpartition = vpartition, 
 	kpartition = kpartition, vkpartition = vkpartition, kvpartition = kvpartition, pack = pack, diffclock = diffclock, 
-	ndiffclock = ndiffclock, diffmemory = diffmemory, xtostring = xtostring, pp = pp, export = export, fn = fn,
+	ndiffclock = ndiffclock, diffmemory = diffmemory, xtostring = xtostring, pp = pp, export = export, fn = fn, mt = mt,
+}
+
+LootMT = {
+	__index = functions,
 }
 
 return functions

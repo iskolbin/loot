@@ -169,6 +169,27 @@ local t = {[30]=30,x = "xxx",y = "y",[20]=30}
 assert( equal( vkfilterI(t,op.eq), {[30]=30,y="y"} ) and equal(t,{[30]=30,y="y"}))
 assert( equal( kvfilterI({[10] = 20, [-5] = -20, [20] = 10},op.gt),{[-5]=-20,[20]=10} ))
 
+
+assert( equal( mapfilter({1,2,3,4,5,6,7,8,9,10},cr.add(2),is.odd), {3,5,7,9,11} ))
+assert( equal( imapfilter({0,1,3,2,0},op.add, op.eq), {1,5} ))
+assert( equal( imapfilter({1,2,3,4,5},cr.add(2), is.odd), {3,5,7} ))
+assert( equal( vmapfilter({x = 20, y = 40}, cr.sub(10), cr.lt(30)), {x=10} ))
+assert( equal( kmapfilter({[-10] = 2, [20] = 30, [5] = 4}, cr.add(4), is.even ), {[-10]=-6,[20]=24} ))
+assert( equal( vkmapfilter({[30]=30,x = "xxx",y = "y",[20]=30,[''] = ''}, op.concat, op.ne), {[30]="3030",y="yy",x="xxxx",[20] = "3020"} ))
+assert( equal( kvmapfilter({[10] = 20, [-5] = -20, [20] = 10},cr.mul(-1), op.gt),{[10]=-10,[20]=-20} ))
+
+local t = {2,3,4}
+assert( equal( mapfilterI(t,cr.add(4), is.even),{6,8}) and equal(t,{6,8} ))
+local t = {2,4,3,5}
+assert( equal( imapfilterI( t,function(i,v)return v-1 end, op.ne),{3,2}) and equal( t, {3,2} ))
+local t = {x = 20, y = 40}
+assert( equal( vmapfilterI(t, cr.add(5), cr.lt(30)), {x=25} ) and equal( t,{x=25}))
+local t = {[-10] = 2, [20] = 30, [5] = 4}
+assert( equal( kmapfilterI(t, cr.add(5), is.even ), {[-10]=-5,[20]=25} ) and equal(t,{[-10]=-5,[20]=25}))
+local t = {[30]=30,x = "xxx",y = "y",[20]=30,[''] = ''}
+assert( equal( vkmapfilterI(t,op.concat, op.ne), {[30]='3030',y="yy",x='xxxx',[20]='3020'} ) and equal(t,{[30]='3030',y="yy",x='xxxx',[20]='3020'}))
+assert( equal( kvmapfilterI({[10] = 20, [-5] = -20, [20] = 10},cr.mul(-1), op.gt),{[10]=-10,[20]=-20} ))
+
 assert( foldl( {1,2,3,4}, op.add ) == 10 )
 assert( foldl( {'x','y','z'}, op.concat ) == 'xyz' )
 assert( foldl( {1,2,3,4},op.sub,10) == 0 )
@@ -269,8 +290,8 @@ assert( equal( wild, coroutine.create( function() end )))
 assert( equal( wild, 55 ))
 assert( equal( wild, null ))
 assert( equal( wild, 'xxx' ))
-assert( equal( match( {1,2,3,4,5}, {1,2,wild,capture'X',5} ), {X=4} ))
-assert( equal( match( {1,2,3,{1,2},5}, {1,2,3,{1,capture'Y'},5} ), {Y=2}) )
+assert( equal( match( {1,2,3,4,5}, {1,2,wild,capture'X',5} ), mt{X=4} ))
+assert( equal( match( {1,2,3,{1,2},5}, {1,2,3,{1,capture'Y'},5} ), mt{Y=2}) )
 
 assert( equal( count{1,1,3,3,4,3,2,10}, {[1] = 2, [3] = 3, [2] = 1, [10] = 1, [4] = 1} ))
 assert( nkeys{k= 4, v = 5, 3, 2, 1} == 5 )
@@ -289,12 +310,12 @@ v[v] = v
 copy(v)
 deepcopy( v )
 
-assert( equal( {1,2,3,4,5}, map(range(5),op.self), true ))
-assert( equal( {2,3,4,5}, map(range(2,5),op.self), true ))
-assert( equal( {1,3,5,7,9}, map(range(1,10,2),op.self), true ))
-assert( equal( {5,4,3,2,1}, map(range(5,1,-1),op.self), true ))
+assert( equal( {1,2,3,4,5}, setmetatable( map(range(5),cr.const(true)), nil ), true ))
+assert( equal( {2,3,4,5}, setmetatable( map(range(2,5),op.self), nil), true ))
+assert( equal( {1,3,5,7,9}, setmetatable( map(range(1,10,2),op.self), nil ), true ))
+assert( equal( {5,4,3,2,1}, setmetatable( map(range(5,1,-1),op.self), nil), true ))
 
-assert( equal( setof('red','blue','green'), {red=true,blue=true,green=true} ))
+assert( equal( setof('red','blue','green'), mt{red=true,blue=true,green=true} ))
 assert( equal( intersect(setof('red','green','blue'),setof('red','yellow','blue')), setof('red','blue') ))
 assert( equal( difference(setof('red','green','blue'),setof('red','yellow','blue')), setof('green') ))
 assert( equal( union(setof('red','green','blue'),setof('red','yellow','blue')), setof('red','yellow','blue','green') ))
@@ -310,16 +331,16 @@ local _ = capture'_'
 local ___ = capture'___'
 local R = capture'...'
 local X, Y = capture'X',capture'Y'
-assert( equal( match( {1,2,2,3}, {X,Y,_,_} ), {X = 1, Y = 2} ))
+assert( equal( match( {1,2,2,3}, {X,Y,_,_} ), mt{X = 1, Y = 2} ))
 assert( equal( match( {1,2,2,3}, {X,Y,_} ), false ))
-assert( equal( match( {1,2,3,4,5}, {X,___} ), {X = 1} ))
-assert( equal( match( {1,2,3,4,5}, {Y,X,R} ), {Y = 1, X = 2, _ = {3,4,5}} ))
-assert( equal( match( {1,2,{3,{4,{5}}}}, {X,_,{3,{_,{Y}}}} ), {X = 1, Y = 5} ))
-assert( equal( match( 1, 2, 3, 4, 1 ), {} ))
+assert( equal( match( {1,2,3,4,5}, {X,___} ), mt{X = 1} ))
+assert( equal( match( {1,2,3,4,5}, {Y,X,R} ), mt{Y = 1, X = 2, _ = {3,4,5}} ))
+assert( equal( match( {1,2,{3,{4,{5}}}}, {X,_,{3,{_,{Y}}}} ), mt{X = 1, Y = 5} ))
+assert( equal( match( 1, 2, 3, 4, 1 ), mt{} ))
 assert( equal( match( 1, 2, 3, 4, {} ), false ))
 assert( equal( match( {1,2,3,3,4},
 	{1,_,X,X,X},
-	{1,_,X,X,___} ), {X=3} ))
+	{1,_,X,X,___} ), mt{X=3} ))
 assert( equal( fn'x>2', fn'x>2' ))
 assert( equal( fn'math.sin(x)'(2), math.sin(2)))
 assert( equal( fn'x+y'(1,2), 3 ))
@@ -327,5 +348,7 @@ assert( equal( fn'x*y*z'(2,5,10), 100 ))
 assert( equal( fn'x*y*z*u'(2,5,10,10), 1000 ))
 assert( equal( fn'x*y*z*u*v'(2,5,10,10,20), 20000 ))
 assert( equal( fn'x*y*z*u*v*w'(2,5,10,10,20,30), 600000 ))
+
+assert( mt{1,2,3,4,5}:shuffle():reverse():mapfilter(cr.add(1),cr.gt(2)):sum() == sum{3,4,5,6} )
 
 print( _count, "tests passed" )
