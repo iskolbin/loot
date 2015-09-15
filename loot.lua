@@ -320,8 +320,8 @@ local function mapfilter( t, f, p )   local t_,j = {},0; for i = 1, #t do local 
 local function imapfilter( t, f, p )  local t_,j = {},0; for i = 1, #t do local v_ = f( i, t[i] ); if p( i, v_ ) then j = j + 1; t_[j] = v_ end end return setmetatable( t_, getmetatable(t)) end
 local function vmapfilter( t, f, p )  local t_ = {}; for k,v in pairs( t ) do local v_ = f( v ); if p( v_ ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
 local function kmapfilter( t, f, p )  local t_ = {}; for k,v in pairs( t ) do local v_ = f( k ); if p( k ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
-local function vkmapfilter( t, f, p ) local t_ = {}; for k,v in pairs( t ) do local v_ = f( v, k ); if p( v_, k ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
 local function kvmapfilter( t, f, p ) local t_ = {}; for k,v in pairs( t ) do local v_ = f( k, v ); if p( k, v_ ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
+local function vkmapfilter( t, f, p ) local t_ = {}; for k,v in pairs( t ) do local v_ = f( v, k ); if p( v_, k ) then t_[k] = v_ end end return setmetatable( t_, getmetatable(t)) end
 
 
 -- Inplace map-filter
@@ -329,8 +329,26 @@ local function mapfilterI( t, f, p )   local j = 0; for i = 1, #t do local v_ = 
 local function imapfilterI( t, f, p )  local j = 0; for i = 1, #t do local v_ = f( i, t[i] ); if p( i, v_ ) then j = j + 1; t[j] = v_ end end;  for i = j+1, #t do t[i] = nil end;  return t end
 local function vmapfilterI( t, f, p )  for k,v in pairs( t ) do local v_ = f( v ); if not p( v_ ) then t[k] = nil else t[k] = v_ end end return t end
 local function kmapfilterI( t, f, p )  for k,v in pairs( t ) do local v_ = f( k ); if not p( k ) then t[k] = nil else t[k] = v_ end end return t end
-local function vkmapfilterI( t, f, p ) for k,v in pairs( t ) do local v_ = f( v, k ); if not p( v_, k ) then t[k] = nil else t[k] = v_ end end return t end
 local function kvmapfilterI( t, f, p ) for k,v in pairs( t ) do local v_ = f( k, v ); if not p( k, v_ ) then t[k] = nil else t[k] = v_ end end return t end
+local function vkmapfilterI( t, f, p ) for k,v in pairs( t ) do local v_ = f( v, k ); if not p( v_, k ) then t[k] = nil else t[k] = v_ end end return t end
+
+
+-- Filter-map
+local function filtermap( t, p, f )   local t_,j = {},0; for i = 1, #t do if p( t[i] ) then j = j + 1; t_[j] = f( t[i] ) end end return setmetatable( t_, getmetatable(t)) end
+local function ifiltermap( t, p, f )  local t_,j = {},0; for i = 1, #t do if p( i, t[i] ) then j = j + 1; t_[j] = f( i, t[i] ) end end return setmetatable( t_, getmetatable(t)) end
+local function vfiltermap( t, p, f )  local t_ = {}; for k,v in pairs( t ) do if p( v ) then t_[k] = f( v ) end end return setmetatable( t_, getmetatable(t)) end
+local function kfiltermap( t, p, f )  local t_ = {}; for k,v in pairs( t ) do if p( k ) then t_[k] = f( k ) end end return setmetatable( t_, getmetatable(t)) end
+local function kvfiltermap( t, p, f ) local t_ = {}; for k,v in pairs( t ) do if p( k, v ) then t_[k] = f( k, v ) end end return setmetatable( t_, getmetatable(t)) end
+local function vkfiltermap( t, p, f ) local t_ = {}; for k,v in pairs( t ) do if p( v, k ) then t_[k] = f( v, k ) end end return setmetatable( t_, getmetatable(t)) end
+
+
+-- Inplace filter-map
+local function filtermapI( t, p, f )   local j = 0; for i = 1, #t do if p( t[i] ) then j = j + 1; t[j] = f( t[i] ) end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function ifiltermapI( t, p, f )  local j = 0; for i = 1, #t do if p( i, t[i] ) then j = j + 1; t[j] = f( i, t[i] ) end end;  for i = j+1, #t do t[i] = nil end;  return t end
+local function vfiltermapI( t, p, f )  for k,v in pairs( t ) do if not p( v ) then t[k] = nil else t[k] = f( v ) end end return t end
+local function kfiltermapI( t, p, f )  for k,v in pairs( t ) do if not p( k ) then t[k] = nil else t[k] = f( k ) end end return t end
+local function kvfiltermapI( t, p, f ) for k,v in pairs( t ) do if not p( k, v ) then t[k] = nil else t[k] = f( k, v ) end end return t end
+local function vkfiltermapI( t, p, f ) for k,v in pairs( t ) do if not p( v, k ) then t[k] = nil else t[k] = f( v, k ) end end return t end
 
 
 -- Fold
@@ -340,8 +358,11 @@ local function foldr( t, f, acc )  local l = #t; local j,acc = acc==nil and l-1 
 local function ifoldr( t, f, acc ) local l = #t; local j,acc = acc==nil and l-1 or l,acc==nil and t[l] or acc;  for i = j,1,-1 do acc = f( acc, i, t[i] ) end return acc end
 local function vfold( t, f, acc )  local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, v ) end return acc end
 local function kfold( t, f, acc )  local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, k ) end return acc end
-local function vkfold( t, f, acc ) local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, v, k ) end return acc end
 local function kvfold( t, f, acc ) local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, k, v ) end return acc end
+local function vkfold( t, f, acc ) local j; if acc==nil then j,acc = next(t) end;  for k,v in next, t, j do acc = f( acc, v, k ) end return acc end
+
+
+-- Special folds
 local function sum( t, acc ) local acc = acc or 0;  for i = 1, #t do acc = acc + t[i] end;  return acc end
 local function product( t, acc ) local acc = acc or 1;  for i = 1, #t do acc = acc * t[i] end;  return acc end
 
@@ -918,6 +939,8 @@ functions = {
 	filter = filter, ifilter = ifilter, vfilter = vfilter, kfilter = kfilter, vkfilter = vkfilter, kvfilter = kvfilter,
 	mapfilter = mapfilter, imapfilter = imapfilter, vmapfilter = vmapfilter, kmapfilter = kmapfilter, vkmapfilter = vkmapfilter, kvmapfilter = kvmapfilter,
 	mapfilterI = mapfilterI, imapfilterI = imapfilterI, vmapfilterI = vmapfilterI, kmapfilterI = kmapfilterI, vkmapfilterI = vkmapfilterI, kvmapfilterI = kvmapfilterI,
+	filtermap = filtermap, ifiltermap = ifiltermap, vfiltermap = vfiltermap, kfiltermap = kfiltermap, vkfiltermap = vkfiltermap, kvfiltermap = kvfiltermap,
+	filtermapI = filtermapI, ifiltermapI = ifiltermapI, vfiltermapI = vfiltermapI, kfiltermapI = kfiltermapI, vkfiltermapI = vkfiltermapI, kvfiltermapI = kvfiltermapI,
 	foldl = foldl, foldr = foldr, ifoldl = ifoldl, ifoldr = ifoldr, kfold = kfold, vfold = vfold, vkfold = vkfold, kvfold = kvfold,
 	each = each, ieach = ieach, veach = veach, keach = keach, vkeach = vkeach, kveach = kveach,
 	mapI = mapI, imapI = imapI, vmapI = vmapI, kmapI = kmapI, vkmapI = vkmapI, kvmapI = kvmapI,
