@@ -42,4 +42,37 @@ function Utils.tostring( arg, saved, ident )
 	end
 end
 
+function Utils.copy( arg )
+	if type( arg ) == 'table' then
+		local result = {}
+		for k, v in pairs(arg) do
+			result[k] = v
+		end
+		return setmetatable( result, getmetatable( arg ))
+	else
+		return arg
+	end
+end
+
+function Utils.deepcopy( arg_ )
+	local function doCopy( arg, t )
+		if type( arg ) == 'table' then
+			if t[arg] == nil then
+				local result = {}
+				t[arg] = result
+				for k, v in pairs(arg) do
+					result[doCopy(k,t)] = doCopy(v,t)
+				end
+				return setmetatable( result, getmetatable( arg ))
+			else
+				return t[arg]
+			end
+		else
+			return arg
+		end
+	end
+
+	return doCopy( arg_, {} )
+end
+
 return Utils
