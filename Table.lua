@@ -610,5 +610,7 @@ Table.setmetatable = setmetatable
 Table.getmetatable = getmetatable
 Table.pairs = pairs
 Table.ipairs = ipairs
+Table.pack = table.pack or function( ... ) return {...} end
+Table.unpack = table.unpack or unpack
 
 return setmetatable( Table, {__call = Table.new} )
