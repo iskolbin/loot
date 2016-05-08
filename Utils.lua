@@ -12,8 +12,9 @@ function Utils.tostring( arg, saved, ident )
 			saved.recursive[arg] = true
 			return '<table rec:' .. saved[arg] .. '>'
 		else
-			saved.n = saved.n + 1
+			saved.n = (saved.n or 0) + 1
 			saved[arg] = saved.n
+			saved.recursive = saved.recursive or {}
 			local mt = getmetatable( arg )
 			if mt ~= nil and mt.__tostring then
 				return mt.__tostring( arg )
@@ -73,6 +74,14 @@ function Utils.deepcopy( arg_ )
 	end
 
 	return doCopy( arg_, {} )
+end
+
+function Utils.print( ... )
+	for i = 1, select( '#', ... ) do
+		io.write( Utils.tostring( select( i, ... )))
+		io.write( ' ' )
+	end
+	io.write( '\n' )
 end
 
 return Utils
