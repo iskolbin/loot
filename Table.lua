@@ -21,14 +21,14 @@ function Table:match( ... )
 end
 
 -- Searching
+local function defaultcmp( a, b ) 
+	return a < b 
+end
+		
 function Table:indexof( item, cmp )
 	if not cmp then
 		for i = 1, #self do if self[i] == item then return i end end
 	else
-		local function defaultcmp( a, b ) 
-			return a < b 
-		end
-		
 		local init, limit = 1, #self
 		local f = type( cmp ) == 'function' and cmp or defaultcmp
 		local floor = math.floor
@@ -150,20 +150,20 @@ function Table:reject( toremove, cmp )
 	return Table.cpmt( result, self )
 end
 
-function Table:flatten()
-	local function doFlatten( t, v, index )
-		if type( v ) == 'table' then
-			for k = 1, #v do index = doFlatten( t, v[k], index ) end
-		else
-			index = index + 1
-			t[index] = v
-		end
-		return index
+local function doflatten( t, v, index )
+	if type( v ) == 'table' then
+		for k = 1, #v do index = doflatten( t, v[k], index ) end
+	else
+		index = index + 1
+		t[index] = v
 	end
+	return index
+end
 
+function Table:flatten()
 	local result, j = {}, 0
 	for i = 1, #self do 
-		j = doFlatten( result, self[i], j ) 
+		j = doflatten( result, self[i], j ) 
 	end
 	return Table.cpmt( result, self )
 end
@@ -397,6 +397,9 @@ function Table:foldvk( f, acc )
 	return acc 
 end
 
+-- Alias
+Table.reduce = Table.foldl
+
 -- For each
 function Table:each( f )
 	for i = 1, #self do f( self[i] ) end 
@@ -595,8 +598,17 @@ end
 
 local TableMt = {__index = Table}
 
-function Table.new( _, v )
-	return setmetatable( v, TableMt ) 
+function Table:box()
+	local mt = getmetatable( self )
+	if mt then	
+		return setmetatable( Utils.copy( self ), {__index = Table, __metatable__ = mt} )
+	else
+		return setmetatable( Utils.copy( self ), TableMt )
+	end
+end
+
+function Table:unbox()
+	return setmetatable( self, getmetatable(self).__metatable__ )
 end
 
 function Table:sort( cmp )
@@ -613,4 +625,4 @@ Table.ipairs = ipairs
 Table.pack = table.pack or function( ... ) return {...} end
 Table.unpack = table.unpack or unpack
 
-return setmetatable( Table, {__call = Table.new} )
+return setmetatable( Table, {__call = function(_, tbl) return setmetatable(tbl or {}, TableMt) end} )

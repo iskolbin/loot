@@ -1,7 +1,8 @@
 local Set = {}
-local SetMt
 
-function Set:new( ... )
+local SetMt = {__index = Set}
+
+function Set.new( ... )
 	local result = {}
 	for i = 1, select( '#', ... ) do
 		result[select( i, ... )] = true
@@ -39,6 +40,5 @@ function Set:difference( other )
 	return setmetatable( result, getmetatable( self ))
 end
 
-SetMt = {__index = Set}
 
-return setmetatable( Set, {__call = Set.new} )
+return setmetatable( Set, {__call = function(_,...) return Set.new(...) end} )
